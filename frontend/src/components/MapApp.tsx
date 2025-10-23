@@ -323,20 +323,22 @@ export default function MapApp() {
     }
   }, [sections]);
 
-  function LayersPanel() {
-    if (!showLayers) return null;
-    return (
-      <div className="fixed top-16 left-4 z-30 w-80 max-h-[70vh] overflow-auto bg-white/95 border rounded-2xl shadow p-3">
-        <div className="text-sm font-semibold mb-2">Layers</div>
-        {["Active","Property","Social","Infrastructure","Areas"].map(g => (
-          <div key={g} className="mb-3">
-            <div className="text-xs uppercase tracking-wide opacity-70 mb-1">{g}</div>
-            {/* your toggle rows go here */}
-          </div>
-        ))}
-      </div>
-       );
-      }
+
+  function LayersPanel({ open }: { open: boolean }) {
+  if (!open) return null;
+  return (
+    <div className="fixed top-16 left-4 z-30 w-80 max-h-[70vh] overflow-auto bg-white/95 border rounded-2xl shadow p-3">
+      <div className="text-sm font-semibold mb-2">Layers</div>
+      {["Active","Property","Social","Infrastructure","Areas"].map((g) => (
+        <div key={g} className="mb-3">
+          <div className="text-xs uppercase tracking-wide opacity-70 mb-1">{g}</div>
+          {/* TODO: your toggle rows go here */}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 
 
   /* Add a new empty dataset section (limited to 4) */
@@ -687,15 +689,24 @@ useEffect(() => {
       {!appStarted && SearchRow}
 
       <div className="w-full h-screen relative">
+       
         {/* Map */}
         <div ref={mapContainer} className="absolute inset-0" />
 
-        {/* Overlays */}
-        <LayersPanel />
+        {/* Layers toggle button somewhere in your toolbar */}
+        <button
+          className="px-3 py-1.5 rounded-lg border"
+          onClick={() => setShowLayers((v) => !v)}
+        >
+          {showLayers ? "Hide Layers" : "Layers"}
+        </button>
 
-        {/* Your search panel / summary bar etc. */}
-        {panelOpen && <></>}
+        {/* Layers panel */}
+        <LayersPanel open={showLayers} />
+
       </div>
+
+
 
 
       {/* Editing (after startup) – only when adding */}
