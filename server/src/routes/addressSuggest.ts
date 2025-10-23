@@ -1,54 +1,105 @@
 // server/src/routes/addressSuggest.ts
-import { Router } from 'express';
-import path from 'path';
-import fs from 'fs';
-import Database from 'better-sqlite3';
+import express from "express";
+import path from "path";
+import fs from "fs";
+import Database from "better-sqlite3";
 
-export const addressSuggestRouter = Router();
+// If you're on Node 18+, global fetch exists; otherwise uncomment the next line
+// import fetch from "node-fetch";
 
-const DATA_ROOT = process.env.DATA_ROOT || path.join(__dirname, '../../data');
-const ADDR_DB = process.env.ADDR_DB || path.join(DATA_ROOT, 'addresses.sqlite');
+const router = express.Router();
 
-// open DB only if it exists; otherwise return null (and the route will return [])
+// ---- Env / config ----
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
+
+const DATA_ROOT = process.env.DATA_ROOT || path.join(__dirname, "../../data");
+const ADDR_DB = process.env.ADDR_DB || path.join(DATA_ROOT, "addresses.sqlite");
+
+// ---- Helpers ----
 function openDbIfPresent() {
   if (!fs.existsSync(ADDR_DB)) return null;
   try {
     return new Database(ADDR_DB, { readonly: true /* , fileMustExist: true */ });
   } catch (e) {
-    console.error('Failed to open addresses DB:', e);
+    console.error("Failed to open addresses DB:", e);
     return null;
   }
 }
 
-addressSuggestRouter.get('/', (req, res) => {
-  const q = String(req.query.q || '').trim();
-  if (q.length < 3) return res.json([]);
+function normalizeLimit(input: any, def = 10, max = 50) {
+  const n = Number(input);
+  if (!Number.isFinite(n) || n <= 0) return def;
+  return Math.min(n, max);
+}
 
-  const db = openDbIfPresent();
-  if (!db) {
-    // No DB file present yet (e.g., Render without uploaded file) — keep UI responsive
-    return res.json([]);
-  }
-
+// ---- Route ----
+router.post("/", async (req, res) => {
   try {
-    const stmt = db.prepare(`
-      SELECT full_address AS label
-      FROM address_index
-      WHERE full_address LIKE ?
-      ORDER BY full_address
-      LIMIT 3
-    `);
-    const rows = stmt.all(`%${q}%`);
-    const items = rows.map((r: any, i: number) => ({
-      key: `addr-${i}-${r.label}`,
-      tag: 'Address',
-      label: r.label,
-    }));
-    res.json(items);
-  } catch (e) {
-    console.error('addressSuggest query error:', e);
-    res.json([]);
-  } finally {
-    try { db.close(); } catch {}
+    const q = String((req.body?.q ?? "")).trim();
+    const lim = normalizeLimit(req.body?.lim, 10, 50);
+
+    if (q.length < 2) return res.json([]);
+
+    // Prefer Supabase if configured
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/addresses_search`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ q, lim }),
+      });
+
+      if (!r.ok) {
+        const text = await r.text();
+        console.warn("Supabase RPC error:", r.status, text);
+      } else {
+        const rows: Array<{ id: string; label: string; lon: number; lat: number }> = await r.json();
+        // Normalize to your UI’s expected shape
+        const items = rows.map((r) => ({
+          key: `addr-${r.id}`,
+          tag: "Address" as const,
+          label: r.label,
+          lon: r.lon,
+          lat: r.lat,
+        }));
+        return res.json(items);
+      }
+    }
+
+    // Fallback: local SQLite index (dev/offline mode)
+    const db = openDbIfPresent();
+    if (!db) return res.json([]);
+
+    try {
+      const stmt = db.prepare(
+        `
+        SELECT full_address AS label
+        FROM address_index
+        WHERE full_address LIKE ?
+        ORDER BY full_address
+        LIMIT ?
+      `
+      );
+      const rows = stmt.all(`%${q}%`, lim);
+      const items = rows.map((r: any, i: number) => ({
+        key: `addr-local-${i}`,
+        tag: "Address" as const,
+        label: r.label,
+      }));
+      return res.json(items);
+    } finally {
+      try {
+        db.close();
+      } catch {}
+    }
+  } catch (err) {
+    console.error("addressSuggest error:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
+
+export default router;
