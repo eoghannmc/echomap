@@ -7,6 +7,9 @@ import cors from 'cors';
 
 import { healthRouter } from './routes/health';
 import { addressSuggestRouter } from './routes/addressSuggest';
+import addressSuggest from "./routes/addressSuggest";
+// …
+app.use("/api/address", addressSuggest);
 
 // ---------- Paths / env ----------
 const DATA_ROOT = process.env.DATA_ROOT || path.join(__dirname, '../data');

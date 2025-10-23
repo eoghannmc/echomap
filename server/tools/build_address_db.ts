@@ -1,97 +1,101 @@
+// tools/build_address_db.ts
+// Build a prefix index from data/addresses.csv to public/addresses/index.json
+// Usage:  npx ts-node tools/build_address_db.ts
+
 import fs from "fs";
 import path from "path";
-import Database from "better-sqlite3";
+import readline from "readline";
 
-/**
- * INPUT: a CSV with columns:
- *   objectid,num_road_address,road_name,locality_name,postcode,lon,lat
- * You can produce it from your Vicmap downloads with ogr2ogr or QGIS.
- * Keep only Victoria (it already is), no need for geometry beyond lon/lat here.
- */
-const INPUT_CSV = process.env.ADDR_CSV || path.resolve(__dirname, "../../data/addresses.csv");
-const OUT_DB    = process.env.ADDR_DB  || path.resolve(__dirname, "../../data/addresses.sqlite");
+const CSV_PATH = path.resolve("data/addresses.csv");
+const OUT_DIR = path.resolve("public", "addresses");
+const OUT_JSON = path.join(OUT_DIR, "index.json");
 
-if (!fs.existsSync(INPUT_CSV)) {
-  console.error("Missing input CSV:", INPUT_CSV);
-  process.exit(1);
+// Normalise to ascii-ish, lowercase, alnum+space only
+function normaliseLabel(s: string): string {
+  return s
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
-fs.mkdirSync(path.dirname(OUT_DB), { recursive: true });
 
-const db = new Database(OUT_DB);
-db.pragma("journal_mode = WAL");
-db.pragma("synchronous = NORMAL");
+function prefixKey(s: string): string {
+  return normaliseLabel(s).replace(/\s+/g, "").slice(0, 3); // first 3 chars, no spaces
+}
 
-// main table
-db.exec(`
-  DROP TABLE IF EXISTS addr;
-  CREATE TABLE addr (
-    id INTEGER PRIMARY KEY,
-    num_road_address TEXT,
-    road_name TEXT,
-    locality_name TEXT,
-    postcode TEXT,
-    lon REAL,
-    lat REAL
-  );
-`);
+type Row = { id: string; label: string; lon: number; lat: number; locality?: string; postcode?: string };
+type Bucket = Array<{ id: string; l: string; x: number; y: number }>; // l=label, x=lon, y=lat
 
-// FTS5 virtual table for fast prefix match on combined text
-db.exec(`
-  DROP TABLE IF EXISTS addr_fts;
-  CREATE VIRTUAL TABLE addr_fts USING fts5(
-    full_text, content='addr', content_rowid='id',
-    tokenize = 'porter'
-  );
-`);
+async function main() {
+  if (!fs.existsSync(CSV_PATH)) {
+    console.error(`Missing CSV at ${CSV_PATH}. Run tools/update_addresses.py first.`);
+    process.exit(1);
+  }
+  fs.mkdirSync(OUT_DIR, { recursive: true });
 
-const ins = db.prepare(`
-  INSERT INTO addr (id,num_road_address,road_name,locality_name,postcode,lon,lat)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
-`);
-const updFts = db.prepare(`
-  INSERT INTO addr_fts (rowid, full_text) VALUES (?, ?)
-`);
+  const fileStream = fs.createReadStream(CSV_PATH);
+  const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
-// crude CSV reader
-function* readCSV(file: string) {
-  const text = fs.readFileSync(file, "utf8");
-  const lines = text.split(/\r?\n/);
-  const header = lines.shift();
-  if (!header) return;
-  const cols = header.split(",");
-  const idx = (name:string) => cols.indexOf(name);
-  const idI = idx("objectid");
-  const numI = idx("num_road_address");
-  const roadI = idx("road_name");
-  const locI = idx("locality_name");
-  const pcI = idx("postcode");
-  const lonI = idx("lon");
-  const latI = idx("lat");
-  for (const line of lines) {
+  let headers: string[] = [];
+  const buckets: Record<string, Bucket> = {};
+  let lineNo = 0;
+
+  for await (const line of rl) {
+    lineNo++;
+    if (lineNo === 1) {
+      headers = line.split(","); // simple CSV (no embedded commas in label from our script)
+      continue;
+    }
     if (!line.trim()) continue;
-    const parts = line.split(",");
-    yield {
-      id: Number(parts[idI]),
-      num: parts[numI],
-      road: parts[roadI],
-      loc: parts[locI],
-      pc: parts[pcI],
-      lon: Number(parts[lonI]),
-      lat: Number(parts[latI]),
+
+    const parts = splitCsv(line, headers.length);
+    const obj: any = Object.fromEntries(parts.map((v, i) => [headers[i], v]));
+
+    const row: Row = {
+      id: obj.id,
+      label: obj.label,
+      lon: parseFloat(obj.lon),
+      lat: parseFloat(obj.lat),
+      locality: obj.locality,
+      postcode: obj.postcode
     };
+    if (!row.label || isNaN(row.lon) || isNaN(row.lat)) continue;
+
+    const key = prefixKey(row.label);
+    if (!key) continue;
+
+    if (!buckets[key]) buckets[key] = [];
+    buckets[key].push({ id: row.id, l: row.label, x: row.lon, y: row.lat });
   }
+
+  // Optionally cap bucket sizes to keep payload tiny (keeps most-relevant by natural order)
+  const MAX_PER_BUCKET = 5000; // tune if needed
+  for (const k of Object.keys(buckets)) {
+    if (buckets[k].length > MAX_PER_BUCKET) {
+      buckets[k] = buckets[k].slice(0, MAX_PER_BUCKET);
+    }
+  }
+
+  fs.writeFileSync(OUT_JSON, JSON.stringify({ version: 1, buckets }), "utf-8");
+  console.log(`Built ${OUT_JSON} with ${Object.keys(buckets).length} buckets`);
 }
 
-const tx = db.transaction(() => {
-  let n = 0;
-  for (const r of readCSV(INPUT_CSV)) {
-    const full = [r.num, r.loc, r.pc].filter(Boolean).join(", ");
-    ins.run(r.id, r.num, r.road, r.loc, r.pc, r.lon, r.lat);
-    updFts.run(r.id, full);
-    if (++n % 5000 === 0) console.log("Inserted", n);
+// basic CSV splitter for our simple rows
+function splitCsv(line: string, expected: number): string[] {
+  // labels do not contain commas from our python script, so a naive split is safe.
+  const parts = line.split(",");
+  if (parts.length !== expected) {
+    // fallback: try to recombine tail
+    const head = parts.slice(0, expected - 1);
+    const tail = parts.slice(expected - 1).join(",");
+    return [...head, tail];
   }
-});
-tx();
+  return parts;
+}
 
-db.exec(`CREATE INDEX IF NOT EXISTS idx_addr_loc ON addr(locality_name, postcode);`);
-console.log("Built", OUT_DB);
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

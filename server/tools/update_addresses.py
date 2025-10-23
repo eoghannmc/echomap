@@ -1,385 +1,172 @@
-#!/usr/bin/env python3
-"""
-update_addresses.py
-
-One-stop script to:
-  1) Load Vicmap Address *Point* (from local SHP/FileGDB OR a remote ZIP URL),
-  2) Reproject to WGS84 (EPSG:4326) and export a slim CSV for autocomplete,
-  3) Build a fast SQLite FTS5 index for the Express /api/address-suggest route.
-
-USAGE EXAMPLES
---------------
-# SHP stored outside the project; write CSV/DB into echoapp/server/data
-python server/tools/update_addresses.py --shp "D:/data/vicmap_address_point.shp"
-
-# FileGDB; specify the layer name (open in QGIS to confirm layer)
-python server/tools/update_addresses.py --gdb "D:/data/Vicmap_Address.gdb" --layer "ADDRESS_POINT"
-
-# Download a ZIP once (if provider allows direct download); auto-extract & pick SHP/FGDB inside
-python server/tools/update_addresses.py --zip-url "https://example.com/Vicmap_Address_Point.zip"
-
-OUTPUTS
--------
-echoapp/server/data/addresses.csv
-echoapp/server/data/addresses.sqlite
-
-The Express route can then query SQLite with sub-100ms responses.
-"""
-
+# server/tools/update_addresses.py
 import argparse
-import csv
-import os
+import logging
 import re
-import shutil
-import sqlite3
 import sys
-import tempfile
-import zipfile
 from pathlib import Path
 
-# Optional geospatial stack
+import pandas as pd
+
 try:
     import geopandas as gpd
-    _HAS_GPD = True
+    GPD_ENGINE = "pyogrio"
 except Exception:
-    _HAS_GPD = False
+    import geopandas as gpd
+    GPD_ENGINE = None
 
-# ---------- Configuration ----------
-PROJECT_ROOT = Path(__file__).resolve().parents[2]          # echoapp/
-DATA_DIR     = PROJECT_ROOT / "server" / "data"
-CSV_OUT      = DATA_DIR / "addresses.csv"
-SQLITE_OUT   = DATA_DIR / "addresses.sqlite"
+try:
+    from unidecode import unidecode
+except Exception:
+    def unidecode(s): return s
 
-# Column name variants we’ll try to find (Vicmap sometimes renames)
-FIELD_VARIANTS = {
-    "id": ["OBJECTID", "OBJECTID_1", "FID", "ID"],
-    "num_road_address": ["NUM_ROAD_ADDRESS", "FULL_ADDRESS", "ADDRESS", "ADDRESS_LABEL", "ADD_FULL"],
-    "road_name": ["ROAD_NAME", "STREET_NAME", "RD_NAME", "NAME", "RD_FULL_NAME"],
-    "locality_name": ["LOCALITY_NAME", "LOCALITY", "SUBURB", "TOWN"],
-    "postcode": ["POSTCODE", "PSTCD", "POST_CODE"],
-    # coords (if already lon/lat in the data)
-    "lon": ["LON", "LONG", "LONGITUDE", "X", "POINT_X"],
-    "lat": ["LAT", "LATITUDE", "Y", "POINT_Y"],
-    # building blocks (if num_road_address missing)
-    "house_number": ["HOUSE_NUMBER", "HSE_NO", "HSE_NUM", "NUMBER_1", "ADDR_NUM"],
-    "road_type": ["ROAD_TYPE", "RD_TYPE", "STREET_TYPE", "TYPE"],
-    "road_suffix": ["SUFFIX", "RD_SUFFIX"],
+# --- helpers ---------------------------------------------------------------
+STREET_ABBR = {
+    "ROAD": "RD", "STREET": "ST", "AVENUE": "AVE", "BOULEVARD": "BLVD", "DRIVE": "DR",
+    "COURT": "CT", "CRESCENT": "CRES", "HIGHWAY": "HWY", "LANE": "LN", "PLACE": "PL",
+    "TERRACE": "TCE", "PARADE": "PDE", "WAY": "WAY", "CLOSE": "CL"
 }
 
-# Regex to detect “starts with number” for ranking
-HAS_DIGIT = re.compile(r"\d")
+def clean_spaces(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip())
 
-def find_col(cols, variants):
-    """Return the first column name present from variants (case-insensitive)."""
-    cols_lower = {c.lower(): c for c in cols}
-    for v in variants:
-        if v.lower() in cols_lower:
-            return cols_lower[v.lower()]
-    return None
+def U(s: str) -> str:
+    return clean_spaces(unidecode(str(s or "")).upper())
 
-def ensure_dirs():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+def make_street(road_name, road_type, road_suffix):
+    name = U(road_name)
+    typ = U(road_type)
+    suf = U(road_suffix)
+    if typ in STREET_ABBR: typ = STREET_ABBR[typ]
+    parts = [p for p in [name, typ, suf] if p]
+    return clean_spaces(" ".join(parts))
 
-def load_with_geopandas(src_path: Path, layer: str | None = None):
-    """Load vector with GeoPandas (pyogrio) and return a GeoDataFrame in EPSG:4326."""
-    if not _HAS_GPD:
-        raise RuntimeError("geopandas/pyogrio not available")
-    if src_path.suffix.lower() == ".gdb":
-        if layer is None:
-            raise ValueError("For FileGDB, you must pass --layer <LAYER_NAME> (open in QGIS to inspect).")
-        gdf = gpd.read_file(src_path, layer=layer)
-    else:
-        gdf = gpd.read_file(src_path)
-    # Reproject to WGS84 for lon/lat
-    if gdf.crs is None:
-        # Try to guess; if Vicmap is MGA94 Zone 55 (EPSG:28355), set manually
-        # You can change this default if needed:
-        print("WARNING: No CRS found; assuming EPSG:28355 (MGA94 Zone 55). Adjust if needed.", file=sys.stderr)
-        gdf = gdf.set_crs(epsg=28355)
-    gdf = gdf.to_crs(epsg=4326)
-    # Extract lon/lat from geometry
-    gdf["lon"] = gdf.geometry.x
-    gdf["lat"] = gdf.geometry.y
-    return gdf
+def make_number(n1, s1, n2, s2):
+    a = f"{str(n1).split('.')[0]}{(s1 or '').strip()}" if pd.notna(n1) and str(n1).strip() not in ("", "nan") else ""
+    if pd.notna(n2) and str(n2).strip() not in ("", "0", "nan") and str(n2) != str(n1):
+        b = f"{str(n2).split('.')[0]}{(s2 or '').strip()}"
+        return f"{a}–{b}".replace("--", "-")
+    return a
 
-def load_with_ogr2ogr(src_path: Path, layer: str | None = None) -> Path:
-    """
-    Fallback if geopandas isn't available:
-    Call ogr2ogr to write a temporary CSV with lon/lat in EPSG:4326.
-    Returns the temporary CSV path.
-    """
-    import subprocess
-    tmpdir = Path(tempfile.mkdtemp())
-    out_csv = tmpdir / "ogr_export.csv"
-    layer_arg = []
-    if src_path.suffix.lower() == ".gdb":
-        if not layer:
-            raise ValueError("For FileGDB, pass --layer <LAYER_NAME> with --gdb.")
-        layer_arg = [layer]
-    cmd = [
-        "ogr2ogr", "-f", "CSV", str(out_csv), str(src_path), *layer_arg,
-        "-t_srs", "EPSG:4326", "-lco", "GEOMETRY=AS_XY"
-    ]
-    print("Running:", " ".join(cmd))
-    subprocess.check_call(cmd)
-    return out_csv
+def build_label_from_fields(row):
+    # Prefer LABEL_ADD if it exists and looks complete
+    lab = row.get("LABEL_ADD")
+    if isinstance(lab, str) and len(lab.strip()) > 0:
+        # Normalise to our uppercase style
+        labU = U(lab)
+        # Ensure " VIC " + postcode suffix if missing state
+        if " VIC " not in labU and U(row.get("STATE")) == "VIC":
+            pc = str(row.get("POSTCODE") or "").split(".")[0]
+            loc = U(row.get("LOCALITY"))
+            left = labU
+            right = ", ".join([p for p in [loc if loc else None, f"VIC {pc}" if pc else "VIC"] if p])
+            return f"{left}, {right}" if right else left
+        return labU
 
-def pick_vector_inside_zip(zip_path: Path) -> tuple[Path, str | None]:
-    """
-    Extract ZIP and return (path, layer) to pass to the loader.
-    Prefer SHP. If only a GDB exists, return the .gdb path and require layer name.
-    """
-    tmpdir = Path(tempfile.mkdtemp())
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(tmpdir)
+    num = make_number(row.get("HSE_NUM1"), row.get("HSE_SUF1"),
+                      row.get("HSE_NUM2"), row.get("HSE_SUF2"))
+    street = make_street(row.get("ROAD_NAME"), row.get("ROAD_TYPE"), row.get("RD_SUF"))
+    loc = U(row.get("LOCALITY"))
+    pc = str(row.get("POSTCODE") or "").split(".")[0]
+    state = U(row.get("STATE") or "VIC") or "VIC"
 
-    # Find SHP first
-    shp_list = list(tmpdir.rglob("*.shp"))
-    if shp_list:
-        return shp_list[0], None
+    left = clean_spaces(" ".join([p for p in [num, street] if p]))
+    right = ", ".join([p for p in [loc, f"{state} {pc}" if pc else state] if p])
+    return f"{left}, {right}" if right else left
 
-    # Else find GDB
-    gdb_list = list(tmpdir.rglob("*.gdb"))
-    if gdb_list:
-        # We cannot know the layer name here—user must pass --layer
-        return gdb_list[0], None
+def auto_find_shp(in_path: Path) -> Path:
+    if in_path.is_file() and in_path.suffix.lower() == ".shp":
+        return in_path
+    cands = list(in_path.glob("**/*.shp"))
+    if not cands:
+        raise FileNotFoundError(f"No .shp found under {in_path}")
+    # prefer names that look like ADDRESS/VMADD
+    for c in cands:
+        if c.stem.upper().startswith(("ADDRESS", "VMADD")):
+            return c
+    return cands[0]
 
-    raise FileNotFoundError("No SHP or GDB found in ZIP.")
-
-def download_zip(url: str) -> Path:
-    import urllib.request
-    tmpzip = Path(tempfile.mkdtemp()) / "download.zip"
-    print(f"Downloading {url} → {tmpzip}")
-    with urllib.request.urlopen(url) as resp, open(tmpzip, "wb") as f:
-        shutil.copyfileobj(resp, f)
-    return tmpzip
-
-def build_num_road_address(row, cols) -> str | None:
-    """
-    Fallback to compose full address if NUM_ROAD_ADDRESS is missing.
-    Try house_number + road_name (+ road_type) + locality + postcode.
-    """
-    hn = row.get(cols["house_number"]) if cols.get("house_number") else None
-    rn = row.get(cols["road_name"]) if cols.get("road_name") else None
-    rt = row.get(cols["road_type"]) if cols.get("road_type") else None
-    loc = row.get(cols["locality_name"]) if cols.get("locality_name") else None
-    pc  = row.get(cols["postcode"]) if cols.get("postcode") else None
-
-    parts = []
-    if hn: parts.append(str(hn).strip())
-    if rn: parts.append(str(rn).strip())
-    if rt: parts.append(str(rt).strip())
-    core = " ".join([p for p in parts if p])
-    tail = ", ".join([x for x in [loc and str(loc).strip(), pc and str(pc).strip()] if x])
-    full = core + (f", {tail}" if tail else "")
-    return full or None
-
-def write_csv_from_gdf(gdf, csv_out: Path):
-    cols = list(gdf.columns)
-
-    # Find columns
-    colmap = {}
-    for key, variants in FIELD_VARIANTS.items():
-        colmap[key] = find_col(cols, variants)
-
-    # Ensure lon/lat exist
-    if colmap["lon"] is None or colmap["lat"] is None:
-        # Already added by load_with_geopandas
-        if "lon" in gdf.columns and "lat" in gdf.columns:
-            colmap["lon"], colmap["lat"] = "lon", "lat"
-        else:
-            raise RuntimeError("Could not determine lon/lat columns.")
-
-    # Build rows
-    records = []
-    for _, r in gdf.iterrows():
-        rid = r[colmap["id"]] if colmap["id"] else None
-        lon = float(r[colmap["lon"]])
-        lat = float(r[colmap["lat"]])
-
-        # Prefer a ready-made combined field
-        full = r[colmap["num_road_address"]] if colmap["num_road_address"] else None
-        if not full or not str(full).strip():
-            # compose fallback
-            row_dict = {c: r.get(c, None) for c in cols}
-            full = build_num_road_address(row_dict, colmap)
-
-        locality = (r[colmap["locality_name"]] if colmap["locality_name"] else None) or ""
-        postcode = (r[colmap["postcode"]] if colmap["postcode"] else None) or ""
-
-        records.append({
-            "objectid": int(rid) if rid is not None and str(rid).isdigit() else None,
-            "num_road_address": str(full).upper().strip() if full else "",
-            "locality_name": str(locality).upper().strip(),
-            "postcode": str(postcode).strip(),
-            "lon": lon,
-            "lat": lat,
-        })
-
-    # Filter empties
-    records = [x for x in records if x["num_road_address"]]
-
-    # Write CSV
-    csv_out.parent.mkdir(parents=True, exist_ok=True)
-    with open(csv_out, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=["objectid","num_road_address","locality_name","postcode","lon","lat"])
-        w.writeheader()
-        for rec in records:
-            w.writerow(rec)
-    print(f"Wrote {csv_out} ({len(records):,} rows)")
-
-def write_csv_from_csv(in_csv: Path, out_csv: Path):
-    """If ogr2ogr exported a CSV with X/Y, rename to lon/lat and normalize headers."""
-    import pandas as pd
-    df = pd.read_csv(in_csv)
-    cols = [c for c in df.columns]
-
-    # Map columns
-    def pick(name_list):
-        for n in name_list:
-            if n in df.columns:
-                return n
-            if n.lower() in [c.lower() for c in cols]:
-                # case-insensitive
-                return next(cc for cc in cols if cc.lower() == n.lower())
-        return None
-
-    idc  = pick(FIELD_VARIANTS["id"])
-    numc = pick(FIELD_VARIANTS["num_road_address"])
-    locc = pick(FIELD_VARIANTS["locality_name"])
-    pcc  = pick(FIELD_VARIANTS["postcode"])
-    xc   = pick(FIELD_VARIANTS["lon"]) or "X"
-    yc   = pick(FIELD_VARIANTS["lat"]) or "Y"
-
-    # Normalize & write
-    out_rows = []
-    for _, r in df.iterrows():
-        rid = r.get(idc, None)
-        full = r.get(numc, None)
-        loc = r.get(locc, "")
-        pc  = r.get(pcc, "")
-        lon = float(r.get(xc))
-        lat = float(r.get(yc))
-        out_rows.append({
-            "objectid": int(rid) if rid is not None and str(rid).isdigit() else None,
-            "num_road_address": (str(full).upper().strip() if full else ""),
-            "locality_name": str(loc).upper().strip(),
-            "postcode": str(pc).strip(),
-            "lon": lon,
-            "lat": lat,
-        })
-    out_df = pd.DataFrame(out_rows)
-    out_df = out_df[out_df["num_road_address"] != ""]
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-    out_df.to_csv(out_csv, index=False)
-    print(f"Wrote {out_csv} ({len(out_df):,} rows)")
-
-def build_sqlite(csv_path: Path, sqlite_path: Path):
-    """Create the SQLite DB with FTS5 mirroring the Node version."""
-    if sqlite_path.exists():
-        sqlite_path.unlink()
-
-    con = sqlite3.connect(sqlite_path)
-    con.execute("PRAGMA journal_mode=WAL;")
-    con.execute("PRAGMA synchronous=NORMAL;")
-
-    # main table
-    con.executescript("""
-    DROP TABLE IF EXISTS addr;
-    CREATE TABLE addr (
-      id INTEGER PRIMARY KEY,
-      num_road_address TEXT,
-      road_name TEXT,          -- unused but kept for future
-      locality_name TEXT,
-      postcode TEXT,
-      lon REAL,
-      lat REAL
-    );
-    """)
-
-    # load CSV
-    with open(csv_path, "r", encoding="utf-8") as f:
-        dr = csv.DictReader(f)
-        rows = [
-            (
-                r.get("objectid"),
-                r.get("num_road_address",""),
-                "",  # road_name placeholder
-                r.get("locality_name",""),
-                r.get("postcode",""),
-                float(r.get("lon")),
-                float(r.get("lat")),
-            )
-            for r in dr
-        ]
-    con.executemany(
-        "INSERT INTO addr (id,num_road_address,road_name,locality_name,postcode,lon,lat) VALUES (?,?,?,?,?,?,?)",
-        rows
-    )
-
-    # FTS5: compact, content backed by addr
-    con.executescript("""
-    DROP TABLE IF EXISTS addr_fts;
-    CREATE VIRTUAL TABLE addr_fts USING fts5(
-      full_text, content='addr', content_rowid='id', tokenize='porter'
-    );
-    """)
-    # Populate FTS – use combined text “num_road_address, locality, postcode”
-    con.execute("DELETE FROM addr_fts;")
-    con.execute("""
-      INSERT INTO addr_fts(rowid, full_text)
-      SELECT id, TRIM(
-        COALESCE(num_road_address,'') || ', ' ||
-        COALESCE(locality_name,'') || ' ' ||
-        COALESCE(postcode,'')
-      ) FROM addr;
-    """)
-
-    con.executescript("""
-    CREATE INDEX IF NOT EXISTS idx_addr_locality ON addr(locality_name, postcode);
-    """)
-    con.commit()
-    con.close()
-    print(f"Built {sqlite_path}")
-
+# --- main ------------------------------------------------------------------
 def main():
-    ap = argparse.ArgumentParser()
-    src = ap.add_mutually_exclusive_group(required=True)
-    src.add_argument("--shp", help="Path to Vicmap Address Point .shp (outside project)")
-    src.add_argument("--gdb", help="Path to Vicmap FileGDB .gdb (outside project)")
-    src.add_argument("--zip-url", help="Direct URL to a ZIP containing SHP or GDB")
+    parser = argparse.ArgumentParser(description="Build addresses.csv from VMADD (ADDRESS*.shp)")
+    parser.add_argument("--input", "-i", required=False,
+                        default=r"C:\Users\mccar\PROJECTS\2400 PyPROPERTY\MAP PLOT\SOURCE DATA\SHPFILES\ADDRESSES\VMADD",
+                        help="Path to ADDRESS.shp or folder containing it")
+    parser.add_argument("--out_csv", default="data/addresses.csv")
+    parser.add_argument("--out_parquet", default="data/addresses.parquet")
+    parser.add_argument("--max_rows", type=int, default=0)
+    args = parser.parse_args()
 
-    ap.add_argument("--layer", help="Layer name (required for GDB)")
-    ap.add_argument("--csv-out", help="Override CSV output path", default=str(CSV_OUT))
-    ap.add_argument("--db-out", help="Override SQLite output path", default=str(SQLITE_OUT))
-    args = ap.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-    ensure_dirs()
+    shp_path = auto_find_shp(Path(args.input))
+    logging.info(f"Reading: {shp_path}")
 
-    # 1) Resolve source path (download if zip-url)
-    layer = args.layer
-    if args.zip_url:
-        z = download_zip(args.zip_url)
-        src_path, layer_from_zip = pick_vector_inside_zip(z)
-        # only overwrite layer if user didn’t pass
-        layer = layer or layer_from_zip
-    elif args.shp:
-        src_path = Path(args.shp)
+    try:
+        gdf = gpd.read_file(shp_path, engine=GPD_ENGINE)
+    except Exception:
+        gdf = gpd.read_file(shp_path)
+
+    # CRS handling
+    try:
+        if gdf.crs is None:
+            logging.warning("Input has no CRS; assuming GDA94 / MGA Zone 55 (EPSG:28355). Adjust if needed.")
+            gdf = gdf.set_crs(28355, allow_override=True)
+        gdf = gdf.to_crs(4326)
+    except Exception as e:
+        logging.warning(f"Reprojection failed ({e}); continuing without reprojection.")
+
+    # Expected VMADD fields (per your schema)
+    needed = [
+        "UFI", "HSE_NUM1", "HSE_SUF1", "HSE_NUM2", "HSE_SUF2",
+        "ROAD_NAME", "ROAD_TYPE", "RD_SUF",
+        "LOCALITY", "STATE", "POSTCODE",
+        "LABEL_ADD"
+    ]
+    for c in needed:
+        if c not in gdf.columns:
+            # create empty if missing to keep logic safe
+            gdf[c] = None
+
+    # Build output table
+    df = pd.DataFrame(gdf.drop(columns="geometry", errors="ignore"))
+
+    # Geometry → lon/lat
+    if "geometry" in gdf.columns:
+        df["lon"] = gdf.geometry.x
+        df["lat"] = gdf.geometry.y
     else:
-        src_path = Path(args.gdb)
+        df["lon"] = None
+        df["lat"] = None
 
-    # 2) Load & write CSV
-    csv_out = Path(args.csv_out)
-    if _HAS_GPD:
-        gdf = load_with_geopandas(src_path, layer)
-        write_csv_from_gdf(gdf, csv_out)
+    # ID
+    if "UFI" in df.columns and df["UFI"].notna().any():
+        df["id"] = df["UFI"].astype(str)
     else:
-        print("geopandas not installed—using ogr2ogr fallback.")
-        ogr_csv = load_with_ogr2ogr(src_path, layer)
-        write_csv_from_csv(ogr_csv, csv_out)
+        df["id"] = pd.util.hash_pandas_object(df.index, index=False).astype(str)
 
-    # 3) Build SQLite FTS5
-    build_sqlite(csv_out, Path(args.db_out))
+    # Label
+    df["label"] = gdf.apply(build_label_from_fields, axis=1)
+
+    # Locality/postcode normalisation
+    df["locality"] = df["LOCALITY"].map(lambda s: U(s))
+    df["postcode"] = df["POSTCODE"].map(lambda s: str(s).split(".")[0] if pd.notna(s) else "")
+
+    out = df[["id", "label", "lon", "lat", "locality", "postcode"]].copy()
+
+    if args.max_rows and args.max_rows > 0:
+        out = out.head(args.max_rows)
+
+    Path(args.out_csv).parent.mkdir(parents=True, exist_ok=True)
+    out.to_csv(args.out_csv, index=False, encoding="utf-8")
+    logging.info(f"Wrote CSV: {args.out_csv} ({len(out):,} rows)")
+
+    # Optional Parquet
+    try:
+        Path(args.out_parquet).parent.mkdir(parents=True, exist_ok=True)
+        out.to_parquet(args.out_parquet, index=False)
+        logging.info(f"Wrote Parquet: {args.out_parquet}")
+    except Exception as e:
+        logging.warning(f"Parquet write skipped ({e}).")
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
