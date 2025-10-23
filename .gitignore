@@ -1,12 +1,18 @@
-﻿# Large geodata and generated artifacts
+﻿# Large geodata (keep OUT of git)
 data_master/
 data_web/geojson/
 frontend/static/data/
-server/data/addresses.sqlite
 *.gpkg
 *.geojson
 
-# Node & build stuff (if not already)
+# Node & build outputs
 node_modules/
 frontend/.next/
 server/dist/
+
+# Python venv
+.venv/
+venv/
+
+# Local env files
+server/.env
