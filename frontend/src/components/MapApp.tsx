@@ -11,6 +11,8 @@ type Tag = "Data" | "Places" | "Areas" | "Address" | "Multi";
 
 type SectionStatus = "input" | "searching" | "verified" | "error";
 type DatasetKey = "planning_zones" | "pois" | "sa2" | "dwell_struct";
+// near the top of the component
+const [showLayers, setShowLayers] = useState(false);
 
 interface Filter {
   field: string;
@@ -170,7 +172,7 @@ export default function MapApp() {
   /* Only show search bar during edit when actively adding a dataset */
   const [addingDataset, setAddingDataset] = useState(false);
 
-  const [showLayers, setShowLayers] = useState(false);
+  
 
   /* Global Location (separate from datasets) */
   const [location, setLocation] = useState<ForLocation>({
@@ -548,7 +550,7 @@ async function exportPDF() {
   const onBlurClose = () => setTimeout(()=>setOpen(false),110);
   const onFocusOpen = () => { if (text.trim().length>=2 && panelOpen) setOpen(true); };
 
-  const [showLayers, setShowLayers] = useState(false);
+ 
 const [showInput,  setShowInput]  = useState(false);
 const [showExport, setShowExport] = useState(false);
 const [showMyData, setShowMyData] = useState(false);
