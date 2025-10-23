@@ -1,70 +1,57 @@
-import { Router } from "express";
-import path from "path";
-import Database from "better-sqlite3";
+import { Router } from 'express';
+import path from 'path';
+import fs from 'fs';
+import Database from 'better-sqlite3';
 
 export const addressSuggestRouter = Router();
 
-// point to the DB built above
-const DB_PATH = process.env.ADDR_DB || path.resolve(__dirname, "../../data/addresses.sqlite");
-const db = new Database(DB_PATH, { readonly: true });
+// Resolve DB path from env or DATA_ROOT default
+const DATA_ROOT = process.env.DATA_ROOT || path.join(__dirname, '../../data');
+const ADDR_DB = process.env.ADDR_DB || path.join(DATA_ROOT, 'addresses.sqlite');
 
-/**
- * Strategy:
- *  - If q contains a digit → assume house number search, prefer num_road_address prefix LIKE
- *  - Else → FTS5 prefix via MATCH 'term*'
- *  - Always return top 3
- */
-addressSuggestRouter.get("/", (req, res) => {
-  const q = String(req.query.q || "").trim();
-  if (q.length < 3) return res.json({ suggestions: [] });
+// Helper to open DB only if file exists
+function openDbIfPresent() {
+  if (!fs.existsSync(ADDR_DB)) {
+    return null; // DB not present yet
+  }
+  try {
+    return new Database(ADDR_DB, { readonly: true /*, fileMustExist: true */ });
+  } catch (e) {
+    console.error('Failed to open addresses DB:', e);
+    return null;
+  }
+}
 
-  const hasDigit = /\d/.test(q);
-  const limit = 3;
+addressSuggestRouter.get('/', (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 3) return res.json([]); // same UX rule
+
+  const db = openDbIfPresent();
+  if (!db) {
+    // No DB yet => return empty suggestions so UI stays responsive
+    return res.json([]);
+    // (Optional fallback: call ArcGIS API and proxy results instead)
+  }
 
   try {
-    if (hasDigit) {
-      // fast LIKE on num_road_address (ensure it’s uppercased for consistency)
-      const like = q.toUpperCase() + "%";
-      const stmt = db.prepare(`
-        SELECT id, num_road_address, locality_name, postcode
-        FROM addr
-        WHERE UPPER(num_road_address) LIKE ?
-        ORDER BY num_road_address
-        LIMIT ?
-      `);
-      const rows = stmt.all(like, limit);
-      return res.json({
-        suggestions: rows.map((r:any) => ({
-          key: "address:" + r.id,
-          tag: "Address",
-          label: [r.num_road_address, r.locality_name && `, ${r.locality_name}`, r.postcode && ` ${r.postcode}`].filter(Boolean).join("")
-        }))
-      });
-    } else {
-      // FTS prefix on combined full_text (built as "num_road_address, locality, postcode")
-      // Split by spaces and add * to last token for prefix
-      const tokens = q.split(/\s+/).filter(Boolean);
-      const last = tokens.pop()!;
-      const match = [...tokens, `${last}*`].join(" ");
-
-      const stmt = db.prepare(`
-        SELECT a.id, a.num_road_address, a.locality_name, a.postcode
-        FROM addr a
-        JOIN addr_fts f ON f.rowid = a.id
-        WHERE addr_fts MATCH ?
-        LIMIT ?
-      `);
-      const rows = stmt.all(match, limit);
-      return res.json({
-        suggestions: rows.map((r:any) => ({
-          key: "address:" + r.id,
-          tag: "Address",
-          label: [r.num_road_address, r.locality_name && `, ${r.locality_name}`, r.postcode && ` ${r.postcode}`].filter(Boolean).join("")
-        }))
-      });
-    }
+    const stmt = db.prepare(`
+      SELECT full_address AS label
+      FROM address_index
+      WHERE full_address LIKE ? 
+      ORDER BY full_address
+      LIMIT 3
+    `);
+    const rows = stmt.all(`%${q}%`);
+    const items = rows.map((r: any, i: number) => ({
+      key: `addr-${i}-${r.label}`,
+      tag: 'Address',
+      label: r.label
+    }));
+    res.json(items);
   } catch (e) {
-    console.error("addressSuggest error:", e);
-    return res.json({ suggestions: [] });
+    console.error('addressSuggest query error:', e);
+    res.json([]);
+  } finally {
+    try { db.close(); } catch {}
   }
 });
