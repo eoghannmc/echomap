@@ -1,3 +1,4 @@
+// server/src/routes/addressSuggest.ts
 import { Router } from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -5,17 +6,14 @@ import Database from 'better-sqlite3';
 
 export const addressSuggestRouter = Router();
 
-// Resolve DB path from env or DATA_ROOT default
 const DATA_ROOT = process.env.DATA_ROOT || path.join(__dirname, '../../data');
 const ADDR_DB = process.env.ADDR_DB || path.join(DATA_ROOT, 'addresses.sqlite');
 
-// Helper to open DB only if file exists
+// open DB only if it exists; otherwise return null (and the route will return [])
 function openDbIfPresent() {
-  if (!fs.existsSync(ADDR_DB)) {
-    return null; // DB not present yet
-  }
+  if (!fs.existsSync(ADDR_DB)) return null;
   try {
-    return new Database(ADDR_DB, { readonly: true /*, fileMustExist: true */ });
+    return new Database(ADDR_DB, { readonly: true /* , fileMustExist: true */ });
   } catch (e) {
     console.error('Failed to open addresses DB:', e);
     return null;
@@ -24,20 +22,19 @@ function openDbIfPresent() {
 
 addressSuggestRouter.get('/', (req, res) => {
   const q = String(req.query.q || '').trim();
-  if (q.length < 3) return res.json([]); // same UX rule
+  if (q.length < 3) return res.json([]);
 
   const db = openDbIfPresent();
   if (!db) {
-    // No DB yet => return empty suggestions so UI stays responsive
+    // No DB file present yet (e.g., Render without uploaded file) — keep UI responsive
     return res.json([]);
-    // (Optional fallback: call ArcGIS API and proxy results instead)
   }
 
   try {
     const stmt = db.prepare(`
       SELECT full_address AS label
       FROM address_index
-      WHERE full_address LIKE ? 
+      WHERE full_address LIKE ?
       ORDER BY full_address
       LIMIT 3
     `);
@@ -45,7 +42,7 @@ addressSuggestRouter.get('/', (req, res) => {
     const items = rows.map((r: any, i: number) => ({
       key: `addr-${i}-${r.label}`,
       tag: 'Address',
-      label: r.label
+      label: r.label,
     }));
     res.json(items);
   } catch (e) {

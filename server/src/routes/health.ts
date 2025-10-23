@@ -1,3 +1,8 @@
-import { Router } from "express";
+// server/src/routes/health.ts
+import { Router } from 'express';
+
 export const healthRouter = Router();
-healthRouter.get("/", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+
+healthRouter.get('/', (_req, res) => {
+  res.json({ ok: true, ts: new Date().toISOString() });
+});
