@@ -692,7 +692,7 @@ useEffect(() => {
         <LayersPanel />
 
         {/* Your search panel / summary bar etc. */}
-        {panelOpen && (/* ... */)}
+        {panelOpen && <></>}
       </div>
 
 
