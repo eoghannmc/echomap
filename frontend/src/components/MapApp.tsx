@@ -11,8 +11,6 @@ type Tag = "Data" | "Places" | "Areas" | "Address" | "Multi";
 
 type SectionStatus = "input" | "searching" | "verified" | "error";
 type DatasetKey = "planning_zones" | "pois" | "sa2" | "dwell_struct";
-// near the top of the component
-const [showLayers, setShowLayers] = useState(false);
 
 interface Filter {
   field: string;
@@ -156,10 +154,29 @@ async function fetchGeoJSON(query: any): Promise<GeoJSON.FeatureCollection> {
   return await res.json();
 }
 
+/* ===================== Layers catalog (static) ===================== */
+type LayerGroup = "Active" | "Property" | "Social" | "Infrastructure" | "Areas";
+type LayerType = "fill" | "line" | "circle";
+
+type LayerCfg = {
+  id: string;         // maplibre layer id
+  title: string;
+  group: LayerGroup;
+  on?: boolean;       // default visibility
+  type: LayerType;
+  sourceId: string;   // which source this layer uses
+};
+
+const layerCatalog: LayerCfg[] = [
+  { id: "planning-fill", title: "Planning Zones (fill)", group:"Property", on:true,  type:"fill",   sourceId:"planning" },
+  { id: "planning-line", title: "Planning Zones (line)", group:"Property", on:true,  type:"line",   sourceId:"planning" },
+  { id: "pois",          title: "POIs",                   group:"Infrastructure",     on:false,      type:"circle", sourceId:"pois" },
+  { id: "sa2-fill",      title: "SA2 (fill)",             group:"Areas",              on:false,      type:"fill",   sourceId:"sa2" },
+  { id: "sa2-line",      title: "SA2 (line)",             group:"Areas",              on:false,      type:"line",   sourceId:"sa2" },
+];
+
 /* ===================== Main Component ===================== */
 export default function MapApp() {
-
-  
   /* App start: welcome vs. active */
   const [appStarted, setAppStarted] = useState(false);
 
@@ -172,7 +189,11 @@ export default function MapApp() {
   /* Only show search bar during edit when actively adding a dataset */
   const [addingDataset, setAddingDataset] = useState(false);
 
-  
+  /* Layers UI state */
+  const [showLayers, setShowLayers] = useState(false);
+  const [layerState, setLayerState] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(layerCatalog.map(l => [l.id, !!l.on]))
+  );
 
   /* Global Location (separate from datasets) */
   const [location, setLocation] = useState<ForLocation>({
@@ -199,13 +220,12 @@ export default function MapApp() {
   const locationVerified = location.status==="verified";
   const canShowData = appStarted && !isEditing && panelOpen && allDatasetsVerified && locationVerified;
 
-  
   /* Map */
   const mapRef = useRef<MLMap | null>(null);
   const mapReady = useRef(false);
   const mapContainer = useRef<HTMLDivElement | null>(null);
 
-  /* ===== Suggest (main) – keep open for >=2 chars, addresses join >=3; Abort handled in helper ===== */
+  /* ===== Suggest (main) – keep open for >=2 chars, addresses join >=3 ===== */
   useEffect(() => {
     let alive = true;
     const t = setTimeout(async () => {
@@ -267,7 +287,7 @@ export default function MapApp() {
       } as any,
       center: [144.9631, -37.8136],
       zoom: 10,
-      attributionControl: false, // avoid type clash; we add controls below
+      attributionControl: false,
     });
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
@@ -323,23 +343,51 @@ export default function MapApp() {
     }
   }, [sections]);
 
+  /* Layers panel helper */
+  function LayersPanel() {
+    if (!showLayers) return null;
 
-  function LayersPanel({ open }: { open: boolean }) {
-  if (!open) return null;
-  return (
-    <div className="fixed top-16 left-4 z-30 w-80 max-h-[70vh] overflow-auto bg-white/95 border rounded-2xl shadow p-3">
-      <div className="text-sm font-semibold mb-2">Layers</div>
-      {["Active","Property","Social","Infrastructure","Areas"].map((g) => (
-        <div key={g} className="mb-3">
-          <div className="text-xs uppercase tracking-wide opacity-70 mb-1">{g}</div>
-          {/* TODO: your toggle rows go here */}
-        </div>
-      ))}
-    </div>
-  );
-}
+    const groups: LayerGroup[] = ["Active","Property","Social","Infrastructure","Areas"];
+    const activeFromState = Object.entries(layerState)
+      .filter(([, on]) => on)
+      .map(([id]) => layerCatalog.find(l => l.id === id))
+      .filter(Boolean) as LayerCfg[];
 
-
+    return (
+      <div className="fixed top-16 left-4 z-30 w-80 max-h-[70vh] overflow-auto bg-white/95 border rounded-2xl shadow p-3">
+        <div className="text-sm font-semibold mb-2">Layers</div>
+        {groups.map((g) => {
+          const items = g === "Active" ? activeFromState : layerCatalog.filter(l => l.group === g);
+          if (!items.length) return null;
+          return (
+            <div key={g} className="mb-3">
+              <div className="text-xs uppercase tracking-wide opacity-70 mb-1">{g}</div>
+              <div className="space-y-1">
+                {items.map(l => (
+                  <label key={l.id} className="flex items-center justify-between gap-2 text-sm bg-white border rounded-lg px-2 py-1">
+                    <span>{l.title}</span>
+                    <input
+                      type="checkbox"
+                      checked={!!layerState[l.id]}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setLayerState(prev => ({ ...prev, [l.id]: on }));
+                        const map = mapRef.current;
+                        if (!map) return;
+                        if (map.getLayer(l.id)) {
+                          map.setLayoutProperty(l.id, "visibility", on ? "visible" : "none");
+                        }
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   /* Add a new empty dataset section (limited to 4) */
   function addDatasetSection() {
@@ -351,113 +399,41 @@ export default function MapApp() {
     setAppStarted(true);
     setAddingDataset(true); // show search bar during edit
   }
-type LayerGroup = "Active" | "Property" | "Social" | "Infrastructure" | "Areas";
-
-type LayerCfg = {
-  id: string;             // maplibre layer id (or pseudo)
-  title: string;
-  group: LayerGroup;
-  on?: boolean;           // default visibility
-  type: "fill"|"line"|"circle";
-  sourceId?: string;      // we’ll attach when source is created
-};
-
-const layerCatalog: LayerCfg[] = [
-  { id: "planning-fill", title: "Planning Zones (fill)", group:"Property", on:true,  type:"fill",   sourceId:"planning" },
-  { id: "planning-line", title: "Planning Zones (line)", group:"Property", on:true,  type:"line",   sourceId:"planning" },
-  { id: "pois",          title: "POIs",                   group:"Infrastructure",     on:false, type:"circle", sourceId:"pois" },
-  { id: "sa2-fill",      title: "SA2 (fill)",             group:"Areas",              on:false, type:"fill",   sourceId:"sa2" },
-  { id: "sa2-line",      title: "SA2 (line)",             group:"Areas",              on:false, type:"line",   sourceId:"sa2" },
-];
-const [layerState, setLayerState] = useState<Record<string, boolean>>(
-  Object.fromEntries(layerCatalog.map(l => [l.id, !!l.on]))
-);
-
-{showLayers && (
-  <div className="fixed top-16 left-4 z-30 w-80 max-h-[70vh] overflow-auto bg-white/95 border rounded-2xl shadow p-3">
-    <div className="text-sm font-semibold mb-2">Layers</div>
-    {["Active","Property","Social","Infrastructure","Areas"].map(g => {
-      const items = layerCatalog.filter(l => l.group===g);
-      if (!items.length) return null;
-      const active = g==="Active"
-        ? Object.entries(layerState).filter(([id,on]) => on)
-            .map(([id]) => layerCatalog.find(l=>l.id===id)).filter(Boolean) as LayerCfg[]
-        : items;
-      if (!active.length) return null;
-      return (
-        <div key={g} className="mb-3">
-          <div className="text-xs uppercase tracking-wide opacity-70 mb-1">{g}</div>
-          <div className="space-y-1">
-            {active.map(l => (
-              <label key={l.id} className="flex items-center justify-between gap-2 text-sm bg-white border rounded-lg px-2 py-1">
-                <span>{l.title}
-                <button
-                  className="px-3 py-1.5 rounded-lg border"
-                  onClick={() => setShowLayers(v => !v)}
-                  >
-                  {showLayers ? "Hide Layers" : "Layers"}
-                </button>
-
-                </span>
-                <input
-                  type="checkbox"
-                  checked={!!layerState[l.id]}
-                  onChange={(e) => {
-                    const on = e.target.checked;
-                    setLayerState(prev => ({...prev, [l.id]: on}));
-                    const map = mapRef.current;
-                    if (!map) return;
-                    if (map.getLayer(l.id)) {
-                      map.setLayoutProperty(l.id, "visibility", on ? "visible" : "none");
-                    }
-                  }}
-                />
-              </label>
-            ))}
-          </div>
-        </div>
-      );
-    })}
-  </div>
-)}
-
 
   /* Choose suggestion → address fills Location; datasets populate first input section */
-
   function onChoose(s: SuggestItem){
-  // Address
-  if (s.tag === "Address") {
-    setAppStarted(true);
-    setIsEditing(true);
-    setAddingDataset(false);          // ← ensure search bar hides
-    setLocation({ mode: "address", address: s.label, status: "input" });
-    setLocAddrText(s.label);
-    setLocAddrSuggestions([]);
-    setOpen(false); setSuggestions([]);
-    setText("");
+    // Address
+    if (s.tag === "Address") {
+      setAppStarted(true);
+      setIsEditing(true);
+      setAddingDataset(false);          // hide search bar
+      setLocation({ mode: "address", address: s.label, status: "input" });
+      setLocAddrText(s.label);
+      setLocAddrSuggestions([]);
+      setOpen(false); setSuggestions([]);
+      setText("");
+      if (inputRef.current) inputRef.current.blur();
+      return;
+    }
+
+    if (!appStarted) { setAppStarted(true); setIsEditing(true); }
+    setAddingDataset(false);            // hide search bar after dataset pick
+    setOpen(false); setSuggestions([]); setText("");
     if (inputRef.current) inputRef.current.blur();
-    return;
+
+    if (sections.length===0 || !sections[0] || sections[0].status!=="input") addDatasetSection();
+
+    setSections(prev => {
+      const [head, ...tail] = prev;
+      const next = { ...head };
+      if (s.key==="planning_zones"){ next.dataset="planning_zones"; next.intent="data"; next.options={ zoneCode:"All" }; }
+      else if (s.key==="pois"){      next.dataset="pois"; next.intent="places"; next.options={ poiType:"All" }; }
+      else if (s.key==="sa2"){       next.dataset="sa2"; next.intent="areas"; }
+      else if (s.key==="dwell_struct"){ next.dataset="dwell_struct"; next.intent="data"; next.options={ year:2021, category:"Separate_house" }; }
+      next.status = "input";
+      return [next, ...tail];
+    });
   }
-
-  if (!appStarted) { setAppStarted(true); setIsEditing(true); }
-  setAddingDataset(false);            // ← ensure search bar hides after dataset pick
-  setOpen(false); setSuggestions([]); setText("");
-  if (inputRef.current) inputRef.current.blur();
-
-  if (sections.length===0 || !sections[0] || sections[0].status!=="input") addDatasetSection();
-
-  setSections(prev => {
-    const [head, ...tail] = prev;
-    const next = {...head};
-    if (s.key==="planning_zones"){ next.dataset="planning_zones"; next.intent="data"; next.options={ zoneCode:"All" }; }
-    else if (s.key==="pois"){      next.dataset="pois"; next.intent="places"; next.options={ poiType:"All" }; }
-    else if (s.key==="sa2"){       next.dataset="sa2"; next.intent="areas"; }
-    else if (s.key==="dwell_struct"){ next.dataset="dwell_struct"; next.intent="data"; next.options={ year:2021, category:"Separate_house" }; }
-    next.status = "input";
-    return [next, ...tail];
-  });
-}
-
 
   /* Dataset option handlers */
   function onZoneChange(idx:number, val:string){
@@ -514,19 +490,6 @@ const [layerState, setLayerState] = useState<Record<string, boolean>>(
   function onEdit() {
     setIsEditing(true);
   }
-async function exportPDF() {
-  const map = mapRef.current;
-  if (!map) return;
-  const canvas = map.getCanvas();
-  const dataUrl = canvas.toDataURL("image/png");
-  const { jsPDF } = await import("jspdf");
-  const pdf = new jsPDF({ orientation:"landscape", unit:"pt", format:"a4" });
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const imgW = pageW-40, imgH = pageH-40;
-  pdf.addImage(dataUrl, "PNG", 20, 20, imgW, imgH);
-  pdf.save("map.pdf");
-}
 
   /* Show Data: fetch ALL verified datasets */
   async function onShowData(){
@@ -552,23 +515,21 @@ async function exportPDF() {
   const onBlurClose = () => setTimeout(()=>setOpen(false),110);
   const onFocusOpen = () => { if (text.trim().length>=2 && panelOpen) setOpen(true); };
 
- 
-const [showInput,  setShowInput]  = useState(false);
-const [showExport, setShowExport] = useState(false);
-const [showMyData, setShowMyData] = useState(false);
-const [showAccount,setShowAccount]= useState(false);
+  /* Toolbar mini state (no-op placeholders for now) */
+  const [showInput,  setShowInput]  = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [showMyData, setShowMyData] = useState(false);
+  const [showAccount,setShowAccount]= useState(false);
 
-useEffect(() => {
-  const q = (id:string) => document.getElementById(id);
-  q("btn-layers")?.addEventListener("click", ()=>setShowLayers(v=>!v));
-  q("btn-input") ?.addEventListener("click", ()=>setShowInput(v=>!v));
-  q("btn-export")?.addEventListener("click", ()=>setShowExport(v=>!v));
-  q("btn-mydata")?.addEventListener("click", ()=>setShowMyData(v=>!v));
-  q("btn-account")?.addEventListener("click", ()=>setShowAccount(v=>!v));
-  return () => {};
-}, []);
-
-
+  useEffect(() => {
+    const q = (id:string) => document.getElementById(id);
+    q("btn-layers")?.addEventListener("click", ()=>setShowLayers(v=>!v));
+    q("btn-input") ?.addEventListener("click", ()=>setShowInput(v=>!v));
+    q("btn-export")?.addEventListener("click", ()=>setShowExport(v=>!v));
+    q("btn-mydata")?.addEventListener("click", ()=>setShowMyData(v=>!v));
+    q("btn-account")?.addEventListener("click", ()=>setShowAccount(v=>!v));
+    return () => {};
+  }, []);
 
   /* Dataset chooser pill (dropdown) */
   function DatasetChooser({idx, current}:{idx:number; current?:DatasetKey}) {
@@ -678,70 +639,238 @@ useEffect(() => {
       {/* Map */}
       <div ref={mapContainer} className="absolute inset-0" style={{ minHeight:"100vh" }} />
 
+      {/* Layers toggle button (top-left) */}
+      <div className="absolute top-4 left-4 z-30">
+        <button
+          id="btn-layers"
+          className="px-3 py-1.5 rounded-lg border bg-white shadow"
+          onClick={() => setShowLayers(v => !v)}
+        >
+          {showLayers ? "Hide Layers" : "Layers"}
+        </button>
+      </div>
+
+      {/* Layers panel */}
+      <LayersPanel />
+
       {/* Summary when collapsed */}
       {SummaryBar}
 
       {/* Center panel */}
       {panelOpen && (
-  <div className="absolute left-1/2 -translate-x-1/2" style={{ top:"15vh", width:"min(940px, 88vw)" }}>
-    <div className="bg-white/92 backdrop-blur-sm border rounded-2xl shadow-lg p-4">
-      {/* Welcome state: just the input */}
-      {!appStarted && SearchRow}
+        <div className="absolute left-1/2 -translate-x-1/2" style={{ top:"15vh", width:"min(940px, 88vw)" }}>
+          <div className="bg-white/92 backdrop-blur-sm border rounded-2xl shadow-lg p-4">
+            {/* Welcome state: just the input */}
+            {!appStarted && SearchRow}
 
-      <div className="w-full h-screen relative">
-       
-        {/* Map */}
-        <div ref={mapContainer} className="absolute inset-0" />
+            {/* Editing (after startup) – only when adding */}
+            {appStarted && isEditing && addingDataset && SearchRow}
 
-        {/* Layers toggle button somewhere in your toolbar */}
-        <button
-          className="px-3 py-1.5 rounded-lg border"
-          onClick={() => setShowLayers((v) => !v)}
-        >
-          {showLayers ? "Hide Layers" : "Layers"}
-        </button>
+            {appStarted && (
+              <>
+                {/* Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-lg font-semibold">{headerTitle}</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={`px-3 py-1.5 rounded-lg border ${isEditing ? "text-white" : ""}`}
+                      style={{ background: isEditing ? "var(--clr-primary)" : "white" }}
+                      onClick={()=> isEditing ? onDone() : onEdit()}
+                    >
+                      {isEditing ? "Done" : "Edit"}
+                    </button>
+                    <button
+                      disabled={!canShowData}
+                      onClick={onShowData}
+                      className={`px-4 py-2 rounded-lg text-white ${canShowData ? "btn-accent hover:opacity-95" : "bg-gray-300"}`}
+                    >
+                      Show Data
+                    </button>
+                  </div>
+                </div>
 
-        {/* Layers panel */}
-        <LayersPanel open={showLayers} />
+                {/* === DATASET TABS === */}
+                <div className="mt-3 space-y-3">
+                  {sections.map((s, idx) => {
+                    const zoneChoices = ["All","GRZ","NRZ","RGZ","MUZ"];
+                    const poiChoices = ["All","School","Train Station","Hospital","Supermarket"];
+                    const editingThis = isEditing;
 
-      </div>
+                    return (
+                      <div
+                        key={s.id}
+                        className={`p-3 border rounded-xl space-y-2 ${editingThis ? "" : "bg-gray-50"}`}
+                        style={ editingThis ? { background: "rgba(232,96,23,0.25)" } : undefined }
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm flex items-center gap-2 flex-wrap">
+                            <span className="opacity-80">Showing:</span>
 
+                            {/* Dataset chooser */}
+                            <DatasetChooser idx={idx} current={s.dataset} />
 
+                            {/* Dataset-specific controls */}
+                            {s.dataset==="planning_zones" && (
+                              <DropdownPill
+                                label="Zone"
+                                value={s.options?.zoneCode ?? "All"}
+                                items={zoneChoices}
+                                onSelect={(v)=>onZoneChange(idx,v)}
+                              />
+                            )}
+                            {s.dataset==="pois" && (
+                              <DropdownPill
+                                label="Type"
+                                value={s.options?.poiType ?? "All"}
+                                items={poiChoices}
+                                onSelect={(v)=>onPoiTypeChange(idx,v)}
+                              />
+                            )}
+                            {s.dataset==="sa2" && <Pill active>SA2 boundaries</Pill>}
+                            {s.dataset==="dwell_struct" && (
+                              <>
+                                <DropdownPill
+                                  label="Year"
+                                  value={String(s.options?.year ?? 2021)}
+                                  items={["2011","2016","2021"]}
+                                  onSelect={(v)=>setSections(prev=>prev.map((x,i)=> i!==idx ? x : ({...x, options:{...x.options, year:Number(v)}})))}
+                                />
+                                <DropdownPill
+                                  label="Category"
+                                  value={s.options?.category ?? "Separate_house"}
+                                  items={["Separate_house","Semi_detached","Flat_or_apartment","Other_dwelling","Not_stated"]}
+                                  onSelect={(v)=>setSections(prev=>prev.map((x,i)=> i!==idx ? x : ({...x, options:{...x.options, category:v}})))}
+                                />
+                              </>
+                            )}
+                          </div>
 
+                          <div className="flex items-center gap-2">
+                            <StatusDot status={s.status} />
+                            <button
+                              aria-label="Delete"
+                              title="Delete"
+                              className="w-6 h-6 rounded hover:bg-gray-100 text-gray-700 flex items-center justify-center"
+                              onClick={()=>deleteSection(idx)}
+                              disabled={!isEditing}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
-      {/* Editing (after startup) – only when adding */}
-      {appStarted && isEditing && addingDataset && SearchRow}
+                {/* Add dataset (beneath tabs; hidden when not editing) */}
+                {isEditing && (
+                  <div className="mt-3">
+                    <button
+                      disabled={sections.length>=4}
+                      className={`w-full py-3 border rounded-xl text-sm ${sections.length>=4 ? "text-gray-400 bg-gray-100 cursor-not-allowed" : "text-gray-600 hover:bg-gray-50"}`}
+                      onClick={addDatasetSection}
+                    >
+                      {sections.length>=4 ? "Limit Reached" : "+ Add dataset"}
+                    </button>
+                  </div>
+                )}
 
-      {appStarted && (
-        <>
-          {/* Header */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-lg font-semibold">{headerTitle}</div>
-            <div className="flex items-center gap-2">
-              <button
-                className={`px-3 py-1.5 rounded-lg border ${isEditing ? "text-white" : ""}`}
-                style={{ background: isEditing ? "var(--clr-primary)" : "white" }}
-                onClick={()=> isEditing ? onDone() : onEdit()}
-              >
-                {isEditing ? "Done" : "Edit"}
-              </button>
-              <button
-                disabled={!canShowData}
-                onClick={onShowData}
-                className={`px-4 py-2 rounded-lg text-white ${canShowData ? "btn-accent hover:opacity-95" : "bg-gray-300"}`}
-              >
-                Show Data
-              </button>
-            </div>
+                {/* === LOCATION ROW (tinted feature blue 30%) === */}
+                <div
+                  className="mt-3 p-3 border rounded-xl"
+                  style={{ background: "rgba(14,26,117,0.30)" }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm flex items-center gap-2 flex-wrap">
+                      <span className="opacity-90">For Location:</span>
+                      {isEditing ? (
+                        <div className="flex items-center gap-2">
+                          <Pill active={location.mode==="address"} onClick={()=>setLocation(l=>({...l, mode:"address", status:"input"}))}>Address</Pill>
+                          <Pill active={location.mode==="area"} onClick={()=>setLocation(l=>({...l, mode:"area", status:"input"}))}>Area</Pill>
+                          <Pill active={location.mode==="within"} onClick={()=>setLocation(l=>({...l, mode:"within", status:"input"}))}>within</Pill>
+
+                          {location.mode==="address" && (
+                            <div className="relative">
+                              <input
+                                ref={locAddrInputRef}
+                                className="text-sm border rounded px-2 py-1 bg-white"
+                                placeholder="Type an address"
+                                value={locAddrText}
+                                onChange={(e)=>setLocAddrText(e.target.value)}
+                                onFocus={()=>{ if (locAddrText.trim().length >= 3 && locAddrSuggestions.length>0) setLocAddrOpen(true); }}
+                                onBlur={()=>setTimeout(()=>setLocAddrOpen(false),110)}
+                              />
+                              {locAddrOpen && locAddrSuggestions.length>0 && (
+                                <div className="absolute z-40 left-0 mt-1 bg-white border rounded-xl shadow-xl min-w-[320px] max-h-60 overflow-auto">
+                                  {locAddrSuggestions.map((s, i) => (
+                                    <button
+                                      key={s.key + i}
+                                      className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                      onMouseDown={(e)=>e.preventDefault()}
+                                      onClick={()=>{
+                                        setLocation(prev => ({ ...prev, address: s.label, status: "input" }));
+                                        setLocAddrText(s.label);
+                                        setLocAddrOpen(false);
+                                        if (locAddrInputRef.current) locAddrInputRef.current.blur();
+                                      }}
+                                    >
+                                      {s.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {location.mode==="area" && (
+                            <input className="text-sm border rounded px-2 py-1 bg-white" placeholder="Type an area (SA2/LGA) (stub)" />
+                          )}
+                          {location.mode==="within" && (
+                            <div className="flex items-center gap-2">
+                              <DropdownPill
+                                label="within"
+                                value={String(location.within?.distance_m ?? 500) + " m"}
+                                items={["250 m","500 m","1000 m","2000 m"]}
+                                onSelect={(v)=>{
+                                  const dist = Number(v.split(" ")[0]);
+                                  setLocation(l=>({...l, within:{ distance_m:dist, place_type:l.within?.place_type ?? "Any place" }, status:"input"}));
+                                }}
+                              />
+                              <DropdownPill
+                                value={location.within?.place_type ?? "Any place"}
+                                items={["Any place","School","Train Station","Hospital","Supermarket"]}
+                                onSelect={(v)=>{
+                                  setLocation(l=>({...l, within:{ distance_m:l.within?.distance_m ?? 500, place_type:v }, status:"input"}));
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {location.mode==="address" && <Pill active>Address</Pill>}
+                          {location.mode==="area" && <Pill active>Area</Pill>}
+                          {location.mode==="within" && (
+                            <>
+                              <Pill active>within</Pill>
+                              {location.within?.distance_m && <Pill active>{location.within.distance_m} m</Pill>}
+                              {location.within?.place_type && <Pill active>{location.within.place_type}</Pill>}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusDot status={location.status} />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-
-          {/* …rest of your content (dataset tabs, location row, etc.) … */}
-        </>
+        </div>
       )}
-    </div>
-  </div>
-)}
-
     </div>
   );
 }
