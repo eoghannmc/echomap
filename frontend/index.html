@@ -1,0 +1,1181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>ECHO Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+  <!-- Varela Round -->
+  <link href="https://fonts.googleapis.com/css2?family=Varela+Round&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet"/>
+
+  <style>
+    :root{
+      --echo-blue:#0f2580;
+      --brand-deep:#0e1a75;
+      --accent:#e86017;
+      --ink:#1b1b1f;
+      --muted:#6b7280;
+      --panel-shadow:0 8px 24px rgba(0,0,0,.15);
+      --icon-size:44px;
+    }
+    html, body, #map { height:100%; margin:0; background:#f7f7fb; }
+    body { font-family:'Varela Round', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial; color:var(--ink); }
+    h6 { font-family:'Varela Round', inherit; }
+
+    /* Header */
+    .echo-header{
+      position:fixed; inset:0 0 auto 0; height:56px; backdrop-filter: blur(4px); background:#020f43c0;
+      color:#fff; z-index:1000; display:flex; align-items:center; padding:0 16px;
+      box-shadow:0 2px 10px rgba(0,0,0,.18); transition:opacity .25s ease, transform .25s ease;
+    }
+    .echo-header.hidden { opacity:0; pointer-events:none; transform:translateY(-8px); }
+    .echo-logo{ font-weight:800; font-size:22px; letter-spacing:.3px; position:relative; cursor:pointer; }
+    .echo-logo .accent{ color:#ef6c21; }
+
+    /* Logo dropdown */
+    .logo-menu { position:absolute; top:100%; left:0; margin-top:8px; background:#fff; color:#111;
+      border-radius:10px; box-shadow:var(--panel-shadow); min-width:160px; padding:6px 0; display:none; z-index:1200; }
+    .logo-menu a{ display:block; padding:8px 12px; text-decoration:none; color:#111; font-size:14px; }
+    .logo-menu a:hover{ background:#f4f6ff; }
+    .echo-logo:hover .logo-menu{ display:block; }
+
+    /* Map */
+    #map{ position:absolute; inset:0; }
+
+    /* Toast */
+    #actionToast{
+      position:fixed; left:50%; top:70px; transform:translateX(-50%);
+      background:rgba(255,255,255,.25);
+      border-radius:14px; box-shadow:var(--panel-shadow);
+      padding:8px 10px; z-index:980; display:none; backdrop-filter: blur(4px);
+      max-width:calc(100vw - 184px);
+    }
+    #actionToast .rowline{ display:flex; align-items:center; gap:8px; justify-content:flex-start; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-wrap:wrap; }
+    #actionToast .msg{ color:#27308f; font-size:12px; font-weight:400; }
+    #actionToast .pill{ font-weight:400; font-size:12px; }
+
+    /* Dock & Panels */
+    .dock{ position:fixed; right:16px; top:90px; z-index:950; display:flex; flex-direction:column; align-items:center; gap:12px; }
+    .dock-btn{ width:var(--icon-size); height:var(--icon-size); border-radius:12px; background:#fff; border:none; box-shadow:0 6px 16px rgba(0,0,0,.18); display:grid; place-items:center; cursor:pointer; transition: transform .12s ease, box-shadow .12s ease, outline-color .12s ease; outline:2px solid transparent; outline-offset:0; }
+    .dock-btn svg{ width:20px; height:20px; color:var(--brand-deep); transition:transform .12s ease; }
+    .dock-btn:hover{ outline:2px solid var(--brand-deep); box-shadow:0 4px 10px rgba(0,0,0,.28); }
+    .dock-btn:active{ transform:translateY(1px); }
+    .dock-btn.active{ background:var(--accent); box-shadow: inset 0 3px 8px rgba(0,0,0,.25), 0 6px 16px rgba(0,0,0,.18); outline:2px solid var(--brand-deep); }
+    .dock-label{ font-size:11px; color:var(--brand-deep); margin-top:4px; text-align:center; width:var(--icon-size); text-shadow:0 0 2px #fff, 0 0 4px #fff; }
+
+    .panel{ position:fixed; right:calc(16px + var(--icon-size) + 10px);
+      width:min(320px, 34vw); background:#fff; border-radius:16px; box-shadow:var(--panel-shadow); padding:12px; z-index:940; display:none; }
+    .panel.open{ display:block; }
+    #panel-search{ top: 90px; }
+    #panel-layers{ top:165px; }
+    #panel-export{ top:235px; }
+    #panel-input { top:310px; }
+    .panel-title{ position:sticky; top:0; background:#fff; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 6px 8px; border-bottom:1px solid #eee; margin-bottom:10px; }
+    .panel-close{ border:none; background:transparent; color:var(--muted); }
+    .search-row{ display:flex; gap:8px; }
+    .search-row input{ flex:1; height:36px; border-radius:10px; }
+
+    /* User */
+    .user-dock{ position:fixed; top:8px; right:16px; z-index:1200; display:flex; flex-direction:column; align-items:center; gap:6px; }
+    #btnUser { width:var(--icon-size); height:var(--icon-size); border-radius:12px; background:#fff; border:none; box-shadow:0 6px 16px rgba(0,0,0,.18); display:grid; place-items:center; cursor:pointer; }
+    #panel-user{ position:fixed; right:16px; top:60px; width:min(310px, 34vw); background:#fff; border-radius:16px; box-shadow:var(--panel-shadow); padding:12px; z-index:1190; display:none; }
+    #panel-user.open{ display:block; }
+    .btn-echo { background:var(--brand-deep); color:#fff; }
+    .btn-echo-outline{ border:1px solid var(--brand-deep); color:var(--brand-deep); background:#fff; }
+
+    /* Welcome (aligned with dock top) */
+    #welcome { position:sticky; top:90px; display:flex; align-items:center; justify-content:center; z-index:900; }
+    .welcome-inner{ width:min(520px, 92vw); background:rgba(233,233,233,.021); padding:14px; border-radius:22px; box-shadow:var(--panel-shadow); backdrop-filter: blur(4px); }
+
+    /* Top bar (inside the same white container as search) */
+    .welcome-top{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      background:rgba(255,255,255,.25); padding:6px 10px; border-radius:14px; box-shadow:var(--panel-shadow);
+      margin-bottom:8px; backdrop-filter: blur(4px); min-height:30px;
+    }
+    .top-left,.top-right{ font-size:14px; color:#0f2580bf; font-weight:600; white-space:nowrap; overflow:hidden; }
+    .top-left .accent{ color:#e86017; }
+    .pills{ display:flex; align-items:center; gap:8px; } /* pill spacing */
+
+    /* Roll-in letters */
+    .roll span{ display:inline-block; transform:translateY(14px) rotateX(45deg); opacity:0; }
+    @keyframes rollin { to{ transform:translateY(0) rotateX(0); opacity:1; } }
+    @keyframes rollout { to{ transform:translateY(-14px) rotateX(-45deg); opacity:0; } }
+
+    /* Pills */
+    .pill{ padding:.25rem .65rem; border-radius:999px; background:#eef2ff; color:#27308f; font-size:12px; font-weight:400; cursor:pointer; user-select:none; }
+    .pill.active{ background:var(--accent); color:#fff; outline:2px solid var(--echo-blue); box-shadow: inset 0 2px 6px rgba(0,0,0,.2); }
+
+    /* Search row */
+    .welcome-search{ display:flex; gap:10px; align-items:center; background:#020f43c0; padding:10px; border-radius:12px; transform:translateY(6px); opacity:0; }
+    .welcome-search input{ flex:1; border:none; outline:none; background:transparent; color:#fff; font-size:16px; }
+    .welcome-search input::placeholder{ color:rgba(255,255,255,.8); }
+    .search-btn{ width:40px; height:40px; border-radius:999px; border:none; display:grid; place-items:center; background:#ffffff50; color:var(--brand-deep); box-shadow:0 2px 10px rgba(0,0,0,.15); cursor:pointer; }
+    .search-btn:hover{ background:#ffffff80; }
+    .search-btn svg{ width:18px; height:18px; }
+
+    /* Suggestions */
+    .suggest-box{ position:relative; margin-top:8px; display:none; }
+    .suggest-list{ position:absolute; inset: 0 auto auto 0; width:100%;
+      background:#fff; border:1px solid #eee; border-radius:12px; box-shadow:var(--panel-shadow);
+      max-height:260px; overflow:auto; display:none; z-index:9999; }
+    .suggest-item{ padding:8px 10px; cursor:pointer; font-size:12px;}
+    .suggest-item:hover{ background:#f6f8ff; }
+
+    /* Expandable sections (Search/Layers/Filter) */
+    .welcome-sections{ display:none; margin-top:8px; background:#fff; border-radius:14px; box-shadow:var(--panel-shadow); padding:10px; }
+    .section-title{ font-size:12px; font-weight:700; color:var(--brand-deep); margin:4px 0 8px; }
+    .help-sm{ font-size:12px; color:#6b7280; }
+
+    /* Centered modals */
+    .modal-panel{ position:fixed; left:50%; top:50%; transform:translate(-50%, -50%);
+      width:min(720px, 90vw); max-height:80vh; overflow:auto; background:#fff; border-radius:16px; box-shadow:var(--panel-shadow); padding:12px; z-index:960; display:none; }
+
+    /* Auth modal a bit narrower */
+    #modalAuth .d-grid{ max-width:350px; } /* was 360 */
+
+    /* Popup pill button */
+    .popup-pill{ display:inline-block; padding:.2rem .55rem; border-radius:999px; background:#eef2ff; color:#27308f; font-size:12px; border:none; cursor:pointer; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div id="header" class="echo-header hidden">
+    <div class="echo-logo" id="logo">
+      <span class="accent">echo</span>.io
+      <div class="logo-menu" id="logoMenu">
+        <a href="#" id="navHome">Home</a>
+        <a href="#" id="navAbout">About</a>
+        <a href="#" id="navContact">Contact</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="actionToast"><div class="rowline"></div></div>
+
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- Welcome (top aligned with dock & re-usable for dock Search) -->
+  <div id="welcome">
+    <div class="welcome-inner">
+     
+
+      <!-- Search -->
+      <div id="welcomeSearch" class="welcome-search">
+        <input id="welcomeInput" placeholder="Start typing" />
+        <button id="welcomeGo" class="search-btn" title="Search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </button>
+      </div>
+
+       <!-- Top bar INSIDE same container as search -->
+      <div id="welcomeTop" class="welcome-top">
+        <div id="topLeft" class="top-left roll"></div>
+        <div id="topRight" class="top-right"></div>
+      </div>
+
+      <!-- Suggestions (own area) -->
+      <div class="suggest-box" id="welcomeSuggestBox">
+        <div id="welcomeSuggest" class="suggest-list"></div>
+      </div>
+
+      <!-- Expandable sections (Search / Layers / Filter) -->
+      <div id="welcomeSections" class="welcome-sections"></div>
+    </div>
+  </div>
+
+  <!-- Dock -->
+  <div class="dock" style="display:none;">
+    <div id="dock-search" class="dock-group">
+      <button id="btnDockSearch" class="dock-btn" title="Search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </button>
+      <div class="dock-label">Search</div>
+    </div>
+    <div id="dock-layers" class="dock-group">
+      <button id="btnDockLayers" class="dock-btn" title="Layers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 12 12 17 22 12"></polyline><polyline points="2 17 12 22 22 17"></polyline></svg>
+      </button>
+      <div class="dock-label">Layers</div>
+    </div>
+    <div id="dock-export" class="dock-group">
+      <button id="btnDockExport" class="dock-btn" title="Export">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      </button>
+      <div class="dock-label">Export</div>
+    </div>
+    <div id="dock-input" class="dock-group">
+      <button id="btnDockInput" class="dock-btn" title="Input">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 10 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      </button>
+      <div class="dock-label">Input</div>
+    </div>
+  </div>
+
+  <!-- User -->
+  <div class="user-dock">
+    <button id="btnUser" title="User">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="8" r="4"></circle><path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6"></path>
+      </svg>
+    </button>
+  </div>
+  <div id="panel-user">
+    <div class="panel-title">
+      <h6>User</h6>
+      <button class="panel-close" id="closeUser" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="help-sm mb-2">Looks like you’re not logged in.</div>
+    <div class="d-flex gap-2">
+      <button id="btnLogin" class="btn btn-sm btn-echo">Log in</button>
+      <button id="btnSignup" class="btn btn-sm btn-echo-outline">Sign up</button>
+    </div>
+  </div>
+
+  <!-- Panels (right side) -->
+  <div id="panel-search" class="panel" data-panel>
+    <div class="panel-title">
+      <h6>Search</h6>
+      <button class="panel-close" data-close="panel-search" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="text-muted small">Use the main search in the center.</div>
+  </div>
+
+  <div id="panel-layers" class="panel" data-panel>
+    <div class="panel-title">
+      <h6>Layers</h6>
+      <button class="panel-close" data-close="panel-layers" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="layer-group small">
+      <h6 style="margin-top:0;">Property</h6>
+      <div class="form-check"><input class="form-check-input" type="checkbox" id="lyrProperties"><label class="form-check-label" for="lyrProperties">Property parcels</label></div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" id="lyrZones"><label class="form-check-label" for="lyrZones">Planning zones</label></div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" id="lyrPostcodes"><label class="form-check-label" for="lyrPostcodes">Postcodes</label></div>
+      <h6 class="mt-2">Social</h6>
+      <div class="form-check"><input class="form-check-input" type="checkbox" id="lyrMesh"><label class="form-check-label" for="lyrMesh">Mesh blocks (dwellings)</label></div>
+      <h6 class="mt-2">Places</h6>
+      <div class="form-check"><input class="form-check-input" type="checkbox" id="lyrPOIs"><label class="form-check-label" for="lyrPOIs">POIs</label></div>
+      <h6 class="mt-2">Transport</h6>
+      <div class="form-check"><input class="form-check-input" type="checkbox" id="lyrStations"><label class="form-check-label" for="lyrStations">Train stations</label></div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" id="lyrRail"><label class="form-check-label" for="lyrRail">Rail</label></div>
+    </div>
+  </div>
+
+  <div id="panel-export" class="panel" data-panel>
+    <div class="panel-title">
+      <h6>Export</h6>
+      <button class="panel-close" data-close="panel-export" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="text-center text-muted small py-3">
+      <div class="mb-2">Coming soon</div>
+      <div>(Vector PDF, scale &amp; paper)</div>
+    </div>
+  </div>
+
+  <!-- Input panel -->
+  <div id="panel-input" class="panel" data-panel>
+    <div class="panel-title">
+      <h6>Input</h6>
+      <button class="panel-close" data-close="panel-input" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="help-sm mb-2">Add your data to a geotable</div>
+    <div class="d-grid gap-2 mb-2">
+      <button id="btnAddLocation" class="btn btn-sm" style="background:var(--brand-deep); color:#fff;">Add Location</button>
+      <button id="btnShowTable" class="btn btn-outline-secondary btn-sm">My Locations</button>
+    </div>
+  </div>
+
+  <!-- Add Location modal -->
+  <div id="modalAddLocation" class="modal-panel">
+    <div class="panel-title">
+      <h6>Add Location</h6>
+      <div class="d-flex align-items-center gap-2">
+        <button id="btnAddLocationSubmit" class="btn btn-sm" style="background:var(--brand-deep); color:#fff;">Add</button>
+        <button class="panel-close" id="closeAddLocation" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="section-title">Location Options</div>
+
+    <!-- Location pick row -->
+    <div id="locPickRow" class="mb-2">
+      <div class="d-flex gap-2 align-items-center">
+        <span class="help-sm">Location:</span>
+        <span id="pickedAddress" class="help-sm text-primary flex-grow-1 text-truncate"></span>
+        <button id="btnSearchAddress" class="btn btn-sm btn-outline-secondary">Search Address</button>
+        <button id="btnPickOnMap" class="btn btn-sm btn-outline-primary">Place on Map</button>
+      </div>
+      <!-- modal suggest area -->
+      <div id="modalSuggestBox" class="mt-2" style="display:none;">
+        <div id="modalSuggest" class="suggest-list" style="position:relative; display:none;"></div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-12">
+        <label class="form-label small mb-1">Name</label>
+        <input id="locName" class="form-control form-control-sm" placeholder="Location Name">
+      </div>
+      <div class="col-6">
+        <div class="section-sub">Style</div>
+        <div id="swatches" class="d-flex gap-2"></div>
+      </div>
+      <div class="col-6">
+        <div class="section-sub">Buffer</div>
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="checkbox" id="chkBuffer">
+          <label class="form-check-label" for="chkBuffer">Enable buffer circle</label>
+        </div>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">Radius (m)</span>
+          <input id="bufferRadius" type="number" class="form-control" min="0" max="50000" step="10" value="500" disabled>
+        </div>
+      </div>
+    </div>
+
+    <hr class="my-3">
+    <div class="section-title">Location Data</div>
+
+    <div class="mb-2">
+      <label class="form-label small mb-1">Geotable</label>
+      <select id="selTables" class="form-select form-select-sm">
+        <option value="">— Create new —</option>
+      </select>
+    </div>
+
+    <!-- New table definition -->
+    <div id="newTableBlock" style="display:none; border:1px dashed var(--accent); border-radius:12px; padding:10px;">
+      <div class="help-sm mb-2" style="color:var(--accent);">You’re creating a new geotable. Confirm its fields, then click <b>Create Table</b>.</div>
+      <div class="mb-2">
+        <label class="form-label small mb-1">My Geotable</label>
+        <input id="newTableName" class="form-control form-control-sm" value="Field Visits">
+      </div>
+      <div class="mb-1"><label class="form-label small mb-1">Table fields</label></div>
+      <div id="fieldRows" class="mb-2"></div>
+      <div class="d-flex gap-2 mb-2">
+        <button id="btnAddFieldRow" class="btn btn-outline-secondary btn-sm">Add Field</button>
+        <span class="help-sm">Max 4</span>
+      </div>
+      <button id="btnCreateTable" class="btn btn-sm" style="background:var(--accent); color:#fff;">Create Table</button>
+    </div>
+
+    <div id="customInputsWrap" class="mt-2"></div>
+
+    <div class="mt-2">
+      <label class="form-label small mb-1">Photo (optional)</label>
+      <input id="photoInput" type="file" accept="image/*" capture="environment" class="form-control form-control-sm">
+    </div>
+
+    <div id="addStatus" class="help-sm mt-2"></div>
+  </div>
+
+  <!-- My Locations modal -->
+  <div id="modalViewTable" class="modal-panel">
+    <div class="panel-title">
+      <h6>My Locations</h6>
+      <button class="panel-close" id="closeViewTable" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="d-flex gap-2 mb-2">
+      <select id="selTablesView" class="form-select form-select-sm" style="max-width:260px;"></select>
+      <button id="btnShowOnMap" class="btn btn-sm btn-outline-primary">Show on Map</button>
+      <button id="btnExportCSV" class="btn btn-sm btn-outline-secondary">Export CSV</button>
+      <button id="btnExportGeoJSON" class="btn btn-sm btn-outline-secondary">Export GeoJSON</button>
+      <button id="btnEditFields" class="btn btn-sm btn-outline-danger">Edit Fields</button>
+    </div>
+    <div id="editFieldsBlock" style="display:none; border:1px dashed #bbb; border-radius:12px; padding:10px; margin-bottom:10px;">
+      <div class="section-title" style="margin-top:0;">Edit Fields</div>
+      <div id="editFieldRows" class="mb-2"></div>
+      <div class="d-flex gap-2 mb-2">
+        <button id="btnAddEditFieldRow" class="btn btn-outline-secondary btn-sm">Add Field</button>
+        <span class="help-sm">Max 4 • Renaming migrates existing rows</span>
+      </div>
+      <div class="d-flex gap-2">
+        <button id="btnSaveFields" class="btn btn-sm btn-primary">Save</button>
+        <button id="btnCancelFields" class="btn btn-sm btn-outline-secondary">Cancel</button>
+      </div>
+    </div>
+    <div id="tablePreview" style="max-height:40vh; overflow:auto; border:1px solid #eee; border-radius:10px; padding:8px; font-size:12px;"></div>
+  </div>
+
+  <!-- Account/Auth modal -->
+  <div id="modalAuth" class="modal-panel">
+    <div class="panel-title">
+      <h6>Account</h6>
+      <button class="panel-close" id="closeAuth" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="help-sm mb-2">Placeholder auth: plug your real flow here.</div>
+    <div class="d-grid gap-2" style="max-width:350px;">
+      <input class="form-control form-control-sm" placeholder="Email">
+      <input type="password" class="form-control form-control-sm" placeholder="Password">
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-echo">Continue</button>
+        <button class="btn btn-sm btn-echo-outline" id="authCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+
+  <script>
+    // ---------- MAP ----------
+    const map = L.map('map',{ zoomControl:false }).setView([-37.806654, 144.962971], 12);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{ maxZoom:20, attribution:'&copy; OSM & CARTO' }).addTo(map);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // ---------- HEADER ----------
+    const header = document.getElementById('header');
+    let headerTimer=null;
+    const headerUnlockAt = Date.now() + 4000;
+    function scheduleHide(){ clearTimeout(headerTimer); headerTimer=setTimeout(()=> header.classList.add('hidden'), 1200); }
+    function showHeader(){ if(Date.now()<headerUnlockAt) return; header.classList.remove('hidden'); scheduleHide(); }
+    header.addEventListener('mouseenter', showHeader);
+    document.getElementById('logoMenu').addEventListener('mouseenter', showHeader);
+    document.addEventListener('mousemove', e=>{ if(e.clientY<60) showHeader(); });
+    document.getElementById('navHome').onclick = (e)=>{ e.preventDefault(); location.reload(); };
+    document.getElementById('navAbout').onclick = (e)=>{ e.preventDefault(); alert('About (placeholder)'); };
+    document.getElementById('navContact').onclick = (e)=>{ e.preventDefault(); alert('Contact (placeholder)'); };
+
+    // ---------- DOCK ----------
+    const docks = {
+      search: {btn: document.getElementById('btnDockSearch')},
+      layers: {btn: document.getElementById('btnDockLayers'), panel: document.getElementById('panel-layers')},
+      export: {btn: document.getElementById('btnDockExport'), panel: document.getElementById('panel-export')},
+      input:  {btn: document.getElementById('btnDockInput'), panel: document.getElementById('panel-input')}
+    };
+    function closeAllPanels(){ ['panel-layers','panel-export','panel-input','panel-user'].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.remove('open'); }); }
+    document.querySelector('.dock').style.display='none';
+    docks.search.btn.onclick = ()=>{
+      document.getElementById('welcome').style.display='block';
+      document.getElementById('welcomeInput').focus();
+      closeAllPanels();
+      // ensure it's aligned visually with dock (already same top = 90px)
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    docks.layers.btn.onclick = ()=>{ document.getElementById('panel-layers').classList.toggle('open'); };
+    docks.export.btn.onclick = ()=>{ document.getElementById('panel-export').classList.toggle('open'); };
+    docks.input.btn.onclick  = ()=>{ document.getElementById('panel-input')?.classList.toggle('open'); };
+
+    // Click-away to close side panels
+    document.addEventListener('click', (e)=>{
+      const inside = e.target.closest('.panel, .modal-panel, .logo-menu, .user-dock, #panel-user, #actionToast, .welcome-inner, .dock-btn');
+      if (!inside) closeAllPanels();
+    });
+
+    // ---------- USER PANEL ----------
+    const btnUser = document.getElementById('btnUser');
+    const pnlUser = document.getElementById('panel-user');
+    document.getElementById('closeUser').onclick = ()=> pnlUser.classList.remove('open');
+    btnUser.onclick = ()=> { const on = pnlUser.classList.contains('open'); closeAllPanels(); pnlUser.classList.toggle('open', !on); };
+
+    const modalAuth = document.getElementById('modalAuth');
+    document.getElementById('btnLogin').onclick = ()=> { pnlUser.classList.remove('open'); modalAuth.style.display='block'; };
+    document.getElementById('btnSignup').onclick = ()=> { pnlUser.classList.remove('open'); modalAuth.style.display='block'; };
+    document.getElementById('closeAuth').onclick = ()=> { modalAuth.style.display='none'; };
+    document.getElementById('authCancel').onclick = ()=> { modalAuth.style.display='none'; };
+
+    // ---------- WELCOME UI ----------
+    const topLeft = document.getElementById('topLeft');
+    const topRight = document.getElementById('topRight');
+    const welcomeTop = document.getElementById('welcomeTop');
+    const welcomeSearch = document.getElementById('welcomeSearch');
+    const wInput = document.getElementById('welcomeInput');
+    const wGo = document.getElementById('welcomeGo');
+    const sections = document.getElementById('welcomeSections');
+
+    function rollText(el, text){
+      el.innerHTML='';
+      for(let i=0;i<text.length;i++){
+        const s=document.createElement('span'); s.textContent=text[i];
+        s.style.animation='rollin .4s ease forwards';
+        s.style.animationDelay=`${i*40}ms`;
+        if (text.startsWith('echo') && i<4) s.style.color='#e86017';
+        el.appendChild(s);
+      }
+    }
+    function showTopTexts(){
+      welcomeTop.dataset.mode='text';
+      topLeft.innerHTML=''; topRight.innerHTML='';
+      rollText(topLeft, 'echo.io');
+      topRight.textContent='your digital twin';
+      topRight.style.opacity='0'; topRight.style.transform='translateX(24px)';
+      setTimeout(()=>{ topRight.style.transition='transform .35s ease, opacity .35s ease'; topRight.style.opacity='1'; topRight.style.transform='translateX(0)'; }, 500);
+    }
+    function showTopPills(){
+      welcomeTop.dataset.mode='pills';
+      welcomeTop.innerHTML='';
+      const left = document.createElement('div'); left.className='top-left';
+      left.innerHTML = '<span class="accent">Show </span>me:'; // keep echo.io in place
+      const right = document.createElement('div'); right.className='pills';
+      ['Search','Layers','Filter'].forEach(lbl=>{
+        const p=document.createElement('span'); p.className='pill'; p.textContent=lbl; p.onclick=()=>openSection(lbl.toLowerCase()); right.appendChild(p);
+      });
+      welcomeTop.append(left, right);
+    }
+
+    function openSection(which){
+      // activate pill
+      welcomeTop.querySelectorAll('.pill').forEach(p=> p.classList.toggle('active', p.textContent.toLowerCase()===which));
+      sections.style.display='block';
+      let html='';
+
+      if(which==='search'){
+        // Styled like Layers: checkboxes + same fonts
+        html = `<div class="section-title">Search Options</div>
+          <div class="row g-2 small">
+            <div class="col-6">
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="optSuggest" checked><label class="form-check-label" for="optSuggest">Autosuggest</label></div>
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="optExact"><label class="form-check-label" for="optExact">Exact match</label></div>
+            </div>
+            <div class="col-6">
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="optRegions"><label class="form-check-label" for="optRegions">Include regions</label></div>
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="optHistory"><label class="form-check-label" for="optHistory">Use history</label></div>
+            </div>
+          </div>
+          <div class="text-end mt-2"><button class="btn btn-sm btn-outline-secondary" id="btnDoneSearch">Done</button></div>`;
+      } else if(which==='layers'){
+        html = `<div class="section-title">Layers</div>
+          <div class="row g-2 small">
+            <div class="col-6"><div class="fw-semibold">Planning</div>
+              <div class="form-check"><input class="form-check-input lyr" data-layer="Planning: Zones" type="checkbox" id="lz"><label class="form-check-label" for="lz">Zones</label></div>
+              <div class="form-check"><input class="form-check-input lyr" data-layer="Planning: Overlays" type="checkbox" id="lo"><label class="form-check-label" for="lo">Overlays</label></div>
+            </div>
+            <div class="col-6"><div class="fw-semibold">Environment</div>
+              <div class="form-check"><input class="form-check-input lyr" data-layer="Environment: Vegetation" type="checkbox" id="lev"><label class="form-check-label" for="lev">Vegetation</label></div>
+              <div class="form-check"><input class="form-check-input lyr" data-layer="Environment: Hydrology" type="checkbox" id="leh"><label class="form-check-label" for="leh">Hydrology</label></div>
+            </div>
+            <div class="col-12 mt-2"><div class="fw-semibold">MyData</div>
+              <div class="form-check"><input class="form-check-input lyr" data-layer="MyData: Layer 1" type="checkbox" id="lmd"><label class="form-check-label" for="lmd">Layer 1</label></div>
+            </div>
+          </div>
+          <div class="text-end mt-2"><button class="btn btn-sm btn-outline-secondary" id="btnDoneLayers">Done</button></div>`;
+      } else if(which==='filter'){
+        html = `<div class="section-title">Filter</div>
+          <div class="row g-2 small">
+            <div class="col-6">
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="fRes"><label class="form-check-label" for="fRes">Residential</label></div>
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="fCom"><label class="form-check-label" for="fCom">Commercial</label></div>
+            </div>
+            <div class="col-6">
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="fInd"><label class="form-check-label" for="fInd">Industrial</label></div>
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="fAny" checked><label class="form-check-label" for="fAny">Anytime</label></div>
+            </div>
+          </div>
+          <div class="text-end mt-2"><button class="btn btn-sm btn-outline-secondary" id="btnDoneFilter">Done</button></div>`;
+      }
+      sections.innerHTML = html;
+      sections.querySelector('#btnDoneSearch')?.addEventListener('click', closeSections);
+      sections.querySelector('#btnDoneLayers')?.addEventListener('click', closeSections);
+      sections.querySelector('#btnDoneFilter')?.addEventListener('click', closeSections);
+    }
+    function closeSections(){ sections.style.display='none'; welcomeTop.querySelectorAll('.pill').forEach(p=> p.classList.remove('active')); }
+
+    // Intro
+    function intro(){
+      showTopTexts();
+      setTimeout(()=>{
+        welcomeSearch.style.transition='opacity .35s ease, transform .35s ease';
+        welcomeSearch.style.opacity='1'; welcomeSearch.style.transform='translateY(0)';
+      }, 900);
+    }
+    intro();
+
+    // Swap to pills on focus
+    wInput.addEventListener('focus', ()=>{
+      Array.from(topLeft.querySelectorAll('span')).forEach((s,i)=>{ s.style.animation='rollout .3s ease forwards'; s.style.animationDelay=`${i*20}ms`; });
+      topRight.style.transition='transform .5s ease, opacity .5s ease'; topRight.style.transform='translateX(-24px)'; topRight.style.opacity='0';
+      setTimeout(showTopPills, 250);
+    });
+
+    // Suggestions with hover grace
+    const wSuggestBox = document.getElementById('welcomeSuggestBox');
+    const wList = document.getElementById('welcomeSuggest');
+    let suggestHideTimer=null;
+    function showWelcomeSuggest(){ wSuggestBox.style.display='block'; wList.style.display='block'; }
+    function hideWelcomeSuggest(){ wList.style.display='none'; wSuggestBox.style.display='none'; }
+    function graceHide(){ clearTimeout(suggestHideTimer); suggestHideTimer=setTimeout(hideWelcomeSuggest, 300); }
+    wSuggestBox.addEventListener('mouseenter', ()=> clearTimeout(suggestHideTimer));
+    wSuggestBox.addEventListener('mouseleave', graceHide);
+
+    async function fetchAddressSuggest(q){
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=6&countrycodes=au`;
+      try{ return await (await fetch(url)).json(); }catch{ return []; }
+    }
+    async function fetchRegionSuggest(q){
+      try{ const r = await fetch(`/api/regions?q=${encodeURIComponent(q)}`); if (!r.ok) return []; return await r.json(); }catch{ return []; }
+    }
+    function renderSuggest(listEl, items, onPick){
+      listEl.innerHTML = '';
+      if (!items.length){ listEl.style.display = 'none'; return; }
+      items.forEach(it=>{
+        const d=document.createElement('div'); d.className='suggest-item'; d.textContent=it.label||it.display_name||'';
+        d.onclick=()=> onPick(it);
+        listEl.appendChild(d);
+      });
+      listEl.style.display='block';
+    }
+    function debounce(fn, ms=250){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+    const updateWelcomeSuggest = debounce(async ()=>{
+      const q = wInput.value.trim();
+      if (q.length < 3){ hideWelcomeSuggest(); return; }
+      const a = await fetchAddressSuggest(q); const b = await fetchRegionSuggest(q);
+      const items = [...a.map(x=>({label:x.display_name, lat:+x.lat, lon:+x.lon, z:15})), ...b.map(x=>({label:x.label, lat:+x.lat, lon:+x.lon, z:13}))].slice(0,10);
+      renderSuggest(wList, items, it=>{
+        wInput.value = it.label;
+        map.setView([it.lat,it.lon], it.z||15);
+        showWelcomeSuggest();
+      });
+      items.length ? showWelcomeSuggest() : hideWelcomeSuggest();
+    }, 250);
+    wInput.addEventListener('input', updateWelcomeSuggest);
+    wInput.addEventListener('blur', graceHide);
+
+    // Search press → animate sequence
+    function afterSearchAnimation(){
+      document.querySelector('.dock').style.display='flex';
+      document.getElementById('welcome').style.display='none';
+      showHeader();
+    }
+    function runSearchSequence(){
+      closeSections();
+      welcomeTop.innerHTML = `<div class="top-left" id="statusTxt"></div>`;
+      const s = document.getElementById('statusTxt');
+      const steps = ['echo.searching','echo.loading','echo.showing','echo.ready'];
+      let i=0;
+      const tick = ()=>{
+        s.textContent = steps[i]; i++;
+        if(i<steps.length){ setTimeout(tick, 300); }
+        else{
+          setTimeout(()=>{
+            rollText(s, 'echo.io');
+            setTimeout(()=>{
+              const w = document.getElementById('welcome');
+              w.style.opacity='1'; w.style.transition='opacity .25s ease'; w.style.opacity='0';
+              setTimeout(afterSearchAnimation, 250);
+            }, 450);
+          }, 250);
+        }
+      };
+      tick();
+    }
+    function triggerWelcomeSearch(){ const q = wInput.value.trim(); if (!q) return; hideWelcomeSuggest(); runSearchSequence(); }
+    wGo.onclick = triggerWelcomeSearch;
+    wInput.addEventListener('keydown', e=>{ if(e.key==='Enter') triggerWelcomeSearch(); });
+
+    // ---------- Toast helpers ----------
+    const toastEl = document.getElementById('actionToast');
+    function pillInline(text, onclick){ const s=document.createElement('span'); s.className='pill'; s.textContent=text; s.onclick=(e)=>{ e.stopPropagation(); onclick?.(); }; return s; }
+    function showToastInline(msgText, pills=[]){
+      const row = toastEl.querySelector('.rowline');
+      row.innerHTML=''; const msg=document.createElement('span'); msg.className='msg'; msg.textContent=msgText;
+      row.appendChild(msg); pills.forEach(p=> row.appendChild(p)); toastEl.style.display='block'; toastEl.style.opacity='1';
+    }
+    function hideToast(){ toastEl.style.opacity='0'; setTimeout(()=> toastEl.style.display='none', 150); }
+    function showSearchToast(label){
+      const short = (label||'').slice(0,15) + (label && label.length>15 ? '…' : '');
+      showToastInline(`${short} | SA2: — | LGA: —`, []);
+    }
+
+    // ---------- STORAGE ----------
+    const DB = localforage.createInstance({ name: 'echoio' });
+    const INDEX_KEY = 'tables:index';
+    async function getIndex(){ const idx = await DB.getItem(INDEX_KEY); return Array.isArray(idx)? idx : []; }
+    async function setIndex(idx){ return DB.setItem(INDEX_KEY, idx); }
+    function newId(prefix='t'){ return prefix + Math.random().toString(36).slice(2,10); }
+
+    function featureToFlatRow(feat){
+      const p = feat.properties || {};
+      const photoNames = Array.isArray(p.photos)? p.photos.map(ph=>ph.name).join('; ') : '';
+      const base = {
+        name: p.name || '',
+        address: p.address || '',
+        lat: p.lat ?? (feat.geometry?.coordinates?.[1] ?? ''),
+        lon: p.lon ?? (feat.geometry?.coordinates?.[0] ?? ''),
+        photo: photoNames,
+      };
+      for (const [k,v] of Object.entries(p)){
+        if (!['name','address','lat','lon','photos','source','color','bufferOn','bufferRadius'].includes(k)) base[k]=v;
+      }
+      return base;
+    }
+    function toCSV(features){
+      const rows = features.map(featureToFlatRow);
+      const headers = Array.from(rows.reduce((set,row)=>{ Object.keys(row).forEach(k=>set.add(k)); return set; }, new Set()));
+      const esc = v => v==null? '' : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g,'""')}"` : String(v);
+      return [ headers.join(','), ...rows.map(r => headers.map(h => esc(r[h])).join(',')) ].join('\n');
+    }
+    function downloadText(filename, text){
+      const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+      setTimeout(()=> URL.revokeObjectURL(a.href), 1000);
+    }
+    function downloadJSON(filename, obj){ downloadText(`${filename}`, JSON.stringify(obj, null, 2)); }
+
+    async function createTable(name, fields=[]){
+      const id = newId();
+      const limited = (fields||[]).slice(0,4);
+      const coll = { type:'FeatureCollection', features:[], properties:{ meta:{ id, name, fields:limited, createdAt:new Date().toISOString() } } };
+      await DB.setItem(`table:${id}`, coll);
+      const idx = await getIndex(); idx.push({ id, name, createdAt: coll.properties.meta.createdAt }); await setIndex(idx);
+      return coll;
+    }
+    async function listTables(){ return getIndex(); }
+    async function getTable(id){ return DB.getItem(`table:${id}`); }
+    async function saveTable(coll){ const id = coll?.properties?.meta?.id; if(!id) throw new Error('Invalid table'); return DB.setItem(`table:${id}`, coll); }
+
+    // ---------- Backend stubs ----------
+    async function reverseGeocode(lat, lon){
+      try{ const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=16&addressdetails=1`;
+        return await (await fetch(url, { headers: { 'Accept': 'application/json' } })).json();
+      }catch{ return null; }
+    }
+    async function getBackendAttributes(){ return { sa2: null, lga: null }; }
+
+    // ---------- Appearance controls ----------
+    const swatchColors = ['#0e1a75','#ef6c21','#d9480f','#198754','#6f42c1'];
+    let selectedColor = swatchColors[0];
+    const swatchesEl = document.getElementById('swatches');
+    function renderSwatches(){
+      swatchesEl.innerHTML='';
+      swatchColors.forEach(c=>{
+        const d = document.createElement('div');
+        d.style.cssText='width:22px;height:22px;border-radius:999px;border:2px solid transparent;cursor:pointer;';
+        d.style.background=c;
+        if (c===selectedColor) d.style.borderColor='#111';
+        d.onclick=()=>{ selectedColor=c; renderSwatches(); };
+        swatchesEl.appendChild(d);
+      });
+    }
+    renderSwatches();
+    const chkBuffer = document.getElementById('chkBuffer');
+    const bufferRadius = document.getElementById('bufferRadius');
+    chkBuffer.checked = false; chkBuffer.onchange = ()=> bufferRadius.disabled = !chkBuffer.checked;
+
+    // ---------- Add Location modal logic ----------
+    const btnAddLocation = document.getElementById('btnAddLocation');
+    const btnShowTable  = document.getElementById('btnShowTable');
+    const modalAdd = document.getElementById('modalAddLocation');
+    const closeAddLocation = document.getElementById('closeAddLocation');
+    const btnAddLocationSubmit = document.getElementById('btnAddLocationSubmit');
+
+    const selTables = document.getElementById('selTables');
+    const newTableBlock = document.getElementById('newTableBlock');
+    const newTableName = document.getElementById('newTableName');
+    const fieldRows = document.getElementById('fieldRows');
+    const btnAddFieldRow = document.getElementById('btnAddFieldRow');
+    const btnCreateTable = document.getElementById('btnCreateTable');
+    const customInputsWrap = document.getElementById('customInputsWrap');
+    const photoInput = document.getElementById('photoInput');
+    const addStatus = document.getElementById('addStatus');
+
+    const btnSearchAddress = document.getElementById('btnSearchAddress');
+    const modalSuggestBox = document.getElementById('modalSuggestBox');
+    const modalSuggest = document.getElementById('modalSuggest');
+    const btnPickOnMap = document.getElementById('btnPickOnMap');
+    const pickedAddress = document.getElementById('pickedAddress');
+
+    let pendingPick = null; // {lat, lon, address}
+    let lastTableId=null, lastTableName=null, lastPinName=null;
+
+    btnAddLocation.onclick = async () => {
+      await refreshTablesDropdown(true); // default first table if exists
+      toggleNewTableMode(!selTables.value);
+      renderInputsForSelection();
+      pickedAddress.textContent = '';
+      pendingPick = null;
+      document.getElementById('locName').value='';
+      modalAdd.style.display = 'block';
+    };
+    closeAddLocation.onclick = () => { modalAdd.style.display = 'none'; addStatus.textContent=''; };
+
+    function makeFieldRow(container, keyVal='', typeVal='string', removable=true){
+      const wrap = document.createElement('div');
+      wrap.className='row g-2 align-items-center mb-2';
+      wrap.innerHTML = `
+        <div class="col-8"><input class="form-control form-control-sm key" placeholder="e.g. Dates, People, Notes, Quantities" value="${keyVal}"></div>
+        <div class="col-3">
+          <select class="form-select form-select-sm type">
+            <option ${typeVal==='string'?'selected':''} value="string">string</option>
+            <option ${typeVal==='number'?'selected':''} value="number">number</option>
+            <option ${typeVal==='date'?'selected':''} value="date">date</option>
+          </select>
+        </div>
+        <div class="col-1 text-end">${removable?'<button class="btn btn-sm btn-link text-danger p-0 remove">&times;</button>':''}</div>`;
+      if (removable){ wrap.querySelector('.remove').onclick = ()=> { container.removeChild(wrap); }; }
+      container.appendChild(wrap);
+    }
+    btnAddFieldRow.onclick = ()=>{ if (fieldRows.querySelectorAll('.row').length >= 4) return; makeFieldRow(fieldRows); };
+    function getFieldRows(container){
+      const rows = [];
+      container.querySelectorAll('.row').forEach(r=>{
+        const key = r.querySelector('.key').value.trim();
+        const type = r.querySelector('.type').value;
+        if (key) rows.push({ key, type });
+      });
+      return rows.slice(0,4);
+    }
+    function toggleNewTableMode(on){
+      newTableBlock.style.display = on ? 'block' : 'none';
+      [btnSearchAddress, btnPickOnMap, btnAddLocationSubmit].forEach(el=>{ el.disabled = on; el.classList.toggle('disabled', on); });
+    }
+
+    selTables.onchange = () => { toggleNewTableMode(!selTables.value); renderInputsForSelection(); };
+
+    btnCreateTable.onclick = async ()=>{
+      const name = (newTableName.value||'').trim(); if (!name){ alert('Please enter a table name'); return; }
+      const fields = getFieldRows(fieldRows);
+      const coll = await createTable(name, fields);
+      await refreshTablesDropdown(true);
+      selTables.value = coll.properties.meta.id;
+      lastTableId = coll.properties.meta.id; lastTableName = name;
+      toggleNewTableMode(false);
+      renderInputsForSelection();
+    };
+
+    function renderCustomFieldInputs(fields){
+      customInputsWrap.innerHTML = '';
+      (fields||[]).slice(0,4).forEach(f=>{
+        const id = `field_${f.key}`;
+        const typeAttr = (f.type === 'number') ? 'number' : (f.type === 'date') ? 'date' : 'text';
+        const div = document.createElement('div');
+        div.className = 'mb-2';
+        div.innerHTML = `<label class="form-label small mb-1">${f.key} <span class="text-muted">(${f.type})</span></label>
+          <input id="${id}" class="form-control form-control-sm" type="${typeAttr}" placeholder="${f.key}">`;
+        customInputsWrap.appendChild(div);
+      });
+    }
+    async function renderInputsForSelection(){
+      if (selTables.value){
+        const coll = await getTable(selTables.value);
+        renderCustomFieldInputs(coll?.properties?.meta?.fields || []);
+      } else {
+        renderCustomFieldInputs(getFieldRows(fieldRows));
+      }
+    }
+    async function refreshTablesDropdown(defaultToFirst=false){
+      const list = await listTables();
+      selTables.innerHTML = `<option value="">— Create new —</option>` + list.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+      if (defaultToFirst && list.length){
+        selTables.value = list[0].id;
+        lastTableId = list[0].id; lastTableName = list[0].name;
+      }
+      document.getElementById('selTablesView').innerHTML = list.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    }
+
+    // Search Address inside modal
+    if(btnSearchAddress){
+      btnSearchAddress.onclick = ()=>{
+        modalSuggestBox.style.display='block';
+        let qEl = modalSuggestBox.querySelector('input');
+        if(!qEl){
+          qEl=document.createElement('input'); qEl.className='form-control form-control-sm mb-2'; qEl.placeholder='Search an address…';
+          modalSuggestBox.prepend(qEl);
+        }
+        const run = debounce(async ()=>{
+          const q = qEl.value.trim();
+          if (q.length<4){ modalSuggest.style.display='none'; return; }
+          const a = await fetchAddressSuggest(q);
+          const items = a.map(x=>({label:x.display_name, lat:+x.lat, lon:+x.lon, z:15})).slice(0,10);
+          renderSuggest(modalSuggest, items, it=>{
+            pendingPick = { lat: it.lat, lon: it.lon, address: it.label };
+            setAddLocPickedUI(it.label);
+            modalSuggest.style.display='none';
+          });
+          if (items.length) modalSuggest.style.display='block';
+        }, 250);
+        qEl.oninput = run; qEl.focus();
+      };
+    }
+
+    // Place on Map
+    if(btnPickOnMap){
+      btnPickOnMap.onclick = ()=>{
+        modalAdd.style.display='none';
+        map.getContainer().style.cursor='crosshair';
+        map.once('click', async e=>{
+          const rev = await reverseGeocode(e.latlng.lat, e.latlng.lng);
+          pendingPick = { lat:e.latlng.lat, lon:e.latlng.lng, address: rev?.display_name || `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}` };
+          setAddLocPickedUI(pendingPick.address);
+          modalAdd.style.display='block';
+          map.getContainer().style.cursor='';
+        });
+      };
+    }
+
+    function setAddLocPickedUI(address){
+      pickedAddress.textContent = address || '';
+      const row = document.getElementById('locPickRow');
+      const oldEdit = row.querySelector('#btnEditLoc'); if(oldEdit) oldEdit.remove();
+      if(address){
+        btnSearchAddress.style.display='none'; btnPickOnMap.style.display='none';
+        const edit = document.createElement('button');
+        edit.id='btnEditLoc'; edit.className='btn btn-sm btn-outline-secondary'; edit.textContent='Edit';
+        edit.onclick = ()=>{ btnSearchAddress.style.display=''; btnPickOnMap.style.display=''; edit.remove(); };
+        row.querySelector('.d-flex')?.appendChild(edit);
+      }else{
+        btnSearchAddress.style.display=''; btnPickOnMap.style.display='';
+      }
+    }
+
+    async function ensureTable(){
+      const existingId = selTables.value;
+      if (existingId) {
+        const t = (await listTables()).find(x=>x.id===existingId);
+        lastTableId = existingId; lastTableName = t?.name || 'Geotable';
+        return existingId;
+      }
+      alert('Please create your geotable first.'); throw new Error('no table');
+    }
+    async function photoToBlobUrl(){
+      const f = photoInput.files?.[0]; if (!f) return null;
+      return { blob: f, url: URL.createObjectURL(f), name: f.name };
+    }
+    function readCustomValues(fields){
+      const out = {};
+      (fields||[]).forEach(f=>{
+        const el = document.getElementById(`field_${f.key}`); if (!el) return;
+        let v = el.value;
+        if (f.type === 'number') v = v === '' ? null : Number(v);
+        if (f.type === 'date') v = v || null;
+        out[f.key] = v;
+      });
+      return out;
+    }
+
+    async function addLocationRecordFromPending(){
+      if (!pendingPick){ addStatus.textContent='Please choose a location (search or place on map).'; return; }
+      const {lat, lon, address} = pendingPick;
+      const rev = await reverseGeocode(lat, lon);
+      const addr = address || rev?.display_name || '';
+      const attrs = await getBackendAttributes(lat, lon);
+      const tableId = await ensureTable();
+      const coll = await getTable(tableId);
+      const fields = coll?.properties?.meta?.fields || [];
+      const photo = await photoToBlobUrl();
+
+      const props = {
+        name: (document.getElementById('locName').value || '').trim(),
+        address: addr, lat, lon, source:'map',
+        color: selectedColor,
+        bufferOn: document.getElementById('chkBuffer').checked,
+        bufferRadius: Number(document.getElementById('bufferRadius').value)||0,
+        ...attrs,
+        ...readCustomValues(fields),
+        photos: photo ? [{ id: newId('p'), name: photo.name, blobUrl: photo.url }] : []
+      };
+      if (photo?.blob){
+        const pid = props.photos[0].id;
+        await DB.setItem(`photo:${pid}`, photo.blob);
+      }
+
+      const feat = { type:'Feature', geometry:{ type:'Point', coordinates:[lon, lat] }, properties: props };
+      coll.features.push(feat);
+      await saveTable(coll);
+
+      const marker = L.circleMarker([lat, lon], { radius: 6, color: selectedColor, fillColor: selectedColor, fillOpacity: 0.8 }).addTo(map);
+
+      const field2Label = (fields[1]?.key) || null;
+      const field2Value = field2Label ? (props[field2Label] ?? '') : null;
+      const popupDiv = document.createElement('div');
+      popupDiv.style.fontSize='12px';
+      popupDiv.innerHTML = `
+        <div><b>${props.name || '—'}</b></div>
+        ${field2Label ? `<div>${field2Label}: <span>${field2Value === null ? '' : field2Value}</span></div>` : ``}
+        <div class="mt-1"><button class="popup-pill" id="ppShow">Show table</button></div>`;
+      marker.bindPopup(popupDiv).openPopup();
+      popupDiv.querySelector('#ppShow').onclick = ()=> { openMyLocations(lastTableId); };
+
+      marker.bindTooltip(props.name || 'Added location', {direction:'top', offset: [0,-6]});
+
+      if (props.bufferOn && props.bufferRadius > 0){
+        L.circle([lat, lon], { radius: props.bufferRadius, color: selectedColor, fillColor: selectedColor, fillOpacity: 0.1, weight:1 }).addTo(map);
+      }
+
+      modalAdd.style.display = 'none';
+      lastPinName = props.name || 'Location';
+      showToastAdded(lastPinName, lastTableName);
+    }
+
+    btnAddLocationSubmit.onclick = addLocationRecordFromPending;
+
+    function showToastAdded(pinName, tableName){
+      const see = pillInline('See Table', ()=>{ hideToast(); openMyLocations(lastTableId); });
+      const add = pillInline('Add Another', async ()=>{
+        hideToast();
+        await refreshTablesDropdown(true);
+        selTables.value = lastTableId;
+        toggleNewTableMode(false);
+        renderInputsForSelection();
+        pickedAddress.textContent=''; pendingPick=null; document.getElementById('locName').value='';
+        document.getElementById('modalAddLocation').style.display='block';
+      });
+      const cls = pillInline('Close', ()=> hideToast());
+      showToastInline(`${pinName} added to ${tableName}!`, [see, add, cls]);
+    }
+
+    // ---------- My Locations ----------
+    const modalView = document.getElementById('modalViewTable');
+    document.getElementById('btnShowTable').onclick = async () => { await refreshTablesDropdown(true); modalView.style.display = 'block'; renderPreview(); };
+    document.getElementById('closeViewTable').onclick = () => modalView.style.display = 'none';
+    const selTablesView = document.getElementById('selTablesView');
+    const btnShowOnMap = document.getElementById('btnShowOnMap');
+    const btnExportCSV = document.getElementById('btnExportCSV');
+    const btnExportGeoJSON = document.getElementById('btnExportGeoJSON');
+    const btnEditFields = document.getElementById('btnEditFields');
+    const editFieldsBlock = document.getElementById('editFieldsBlock');
+    const tablePreview = document.getElementById('tablePreview');
+
+    async function renderPreview(){
+      const id = selTablesView.value || (await listTables())[0]?.id;
+      if (!id){ tablePreview.textContent = 'No tables yet.'; return; }
+      selTablesView.value = id;
+      const coll = await getTable(id);
+      const rows = coll.features.map(featureToFlatRow);
+      if (!rows.length){ tablePreview.textContent = 'Empty table'; return; }
+      const headers = Object.keys(rows.reduce((acc,r)=>{ Object.keys(r).forEach(k=>acc[k]=1); return acc; }, {}));
+      const html = [
+        `<table class="table table-sm table-striped"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>`,
+        ...rows.map(r=>`<tr>${headers.map(h=>`<td>${(r[h]??'')}</td>`).join('')}</tr>`),
+        `</tbody></table>`
+      ].join('');
+      tablePreview.innerHTML = html;
+    }
+    selTablesView.onchange = renderPreview;
+
+    btnShowOnMap.onclick = async () => {
+      const id = selTablesView.value; if (!id) return;
+      const coll = await getTable(id);
+      if (window._userLayer) map.removeLayer(window._userLayer);
+      window._userLayer = L.geoJSON(coll, { pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 6, color: f.properties?.color||'#0e1a75', fillColor: f.properties?.color||'#0e1a75', fillOpacity:0.8 }) }).addTo(map);
+      coll.features.forEach(feat=>{
+        if (feat.properties?.bufferOn && feat.properties?.bufferRadius>0){
+          L.circle([feat.geometry.coordinates[1], feat.geometry.coordinates[0]], { radius: feat.properties.bufferRadius, color: feat.properties.color||'#0e1a75', fillColor: feat.properties.color||'#0e1a75', fillOpacity:.1, weight:1 }).addTo(map);
+        }
+      });
+      const pts = coll.features.map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]);
+      if (pts.length) map.fitBounds(pts);
+    };
+    btnExportCSV.onclick = async () => {
+      const id = selTablesView.value; if (!id) return;
+      const coll = await getTable(id);
+      const csv = toCSV(coll.features);
+      const name = coll.properties.meta.name.replace(/[^\w\-]+/g, '_');
+      downloadText(`${name}.csv`, csv);
+    };
+    btnExportGeoJSON.onclick = async () => {
+      const id = selTablesView.value; if (!id) return;
+      const coll = await getTable(id);
+      const name = coll.properties.meta.name.replace(/[^\w\-]+/g, '_');
+      downloadJSON(`${name}.geojson`, coll);
+    };
+
+    // Edit Fields
+    document.getElementById('btnEditFields').onclick = async ()=>{
+      const id = selTablesView.value; if (!id) return;
+      editFieldsBlock.style.display = editFieldsBlock.style.display==='none' ? 'block':'none';
+      if (editFieldsBlock.style.display==='block'){
+        const coll = await getTable(id); renderEditFieldRows(coll.properties.meta.fields);
+      }
+    };
+    function renderEditFieldRows(fields){
+      const editFieldRows = document.getElementById('editFieldRows');
+      editFieldRows.innerHTML='';
+      (fields||[]).slice(0,4).forEach(f=> makeEditRow(f.key, f.type));
+    }
+    function makeEditRow(keyVal='', typeVal='string', removable=true){
+      const editFieldRows = document.getElementById('editFieldRows');
+      const wrap = document.createElement('div');
+      wrap.className='row g-2 align-items-center mb-2';
+      wrap.innerHTML = `
+        <div class="col-7"><input class="form-control form-control-sm key" value="${keyVal}"></div>
+        <div class="col-4">
+          <select class="form-select form-select-sm type">
+            <option ${typeVal==='string'?'selected':''} value="string">string</option>
+            <option ${typeVal==='number'?'selected':''} value="number">number</option>
+            <option ${typeVal==='date'?'selected':''} value="date">date</option>
+          </select>
+        </div>
+        <div class="col-1 text-end">${removable?'<button class="btn btn-sm btn-link text-danger p-0 remove">&times;</button>':''}</div>`;
+      if (removable){ wrap.querySelector('.remove').onclick = ()=> editFieldRows.removeChild(wrap); }
+      editFieldRows.appendChild(wrap);
+    }
+    document.getElementById('btnAddEditFieldRow').onclick = ()=>{
+      const editFieldRows = document.getElementById('editFieldRows');
+      if (editFieldRows.querySelectorAll('.row').length >= 4) return;
+      makeEditRow();
+    };
+    function getEditRows(){
+      const rows = [];
+      document.getElementById('editFieldRows').querySelectorAll('.row').forEach(r=>{
+        const key = r.querySelector('.key').value.trim();
+        const type = r.querySelector('.type').value;
+        if (key) rows.push({ key, type });
+      });
+      return rows.slice(0,4);
+    }
+    document.getElementById('btnCancelFields').onclick = ()=> { editFieldsBlock.style.display='none'; };
+    document.getElementById('btnSaveFields').onclick = async ()=>{
+      const id = selTablesView.value; if (!id) return;
+      const coll = await getTable(id);
+      const oldFields = coll.properties.meta.fields || [];
+      const newFields = getEditRows();
+
+      coll.features.forEach(feat=>{
+        const p = feat.properties || {};
+        for (let i=0;i<Math.max(oldFields.length,newFields.length);i++){
+          const ok = oldFields[i]?.key, nk = newFields[i]?.key;
+          if (ok && nk && ok!==nk && p.hasOwnProperty(ok) && !p.hasOwnProperty(nk)){ p[nk] = p[ok]; delete p[ok]; }
+        }
+        oldFields.map(f=>f.key).forEach(k=>{ if (!newFields.map(f=>f.key).includes(k)) delete p[k]; });
+        feat.properties = p;
+      });
+
+      coll.properties.meta.fields = newFields;
+      await saveTable(coll);
+      editFieldsBlock.style.display='none';
+      renderPreview();
+      showToastInline('Fields updated', [pillInline('Close', ()=>hideToast())]);
+    };
+
+    async function openMyLocations(tableId){
+      await refreshTablesDropdown(true);
+      if (tableId) selTablesView.value = tableId;
+      modalView.style.display = 'block';
+      renderPreview();
+    }
+
+    // Expose search from dock toast use
+    function runSearch(label){
+      if (!label) return;
+      closeAllPanels();
+      document.querySelector('.dock').style.display='flex';
+      showHeader();
+      showSearchToast(label);
+    }
+  </script>
+</body>
+</html>
