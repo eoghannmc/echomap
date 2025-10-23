@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 14, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/mccar/PROJECTS/2400%20ECHO%20APP/echoapp/frontend/src/app/page.tsx"],"sourcesContent":["// frontend/src/app/page.tsx\r\nimport dynamic from 'next/dynamic';\r\n\r\n// Load the client component only on the client, skip server render\r\nconst MapApp = dynamic(() => import('../components/MapApp'), { ssr: false });\r\n\r\nexport default function Page() {\r\n  return <MapApp />;\r\n}\r\n"],"names":[],"mappings":"AAAA,4BAA4B;;;;;;AAC5B;;;;AAEA,mEAAmE;AACnE,MAAM,SAAS,IAAA,0KAAO,EAAC;;;;;;IAAwC,KAAK;;AAErD,SAAS;IACtB,qBAAO,8OAAC;;;;;AACV","debugId":null}}]
+}

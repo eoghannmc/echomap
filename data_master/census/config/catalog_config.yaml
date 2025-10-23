@@ -1,0 +1,39 @@
+items:
+  - id: pop_total
+    table_no: T01
+    title: "Total persons"
+    keywords: ["population","total persons","people","residents"]
+    years: [2011, 2016, 2021]
+    geo: SA2
+    shape: scalar
+    columns_template: "Tot_persons_C{yy}_P"
+    raw_file: null
+
+  - id: pop_age
+    table_no: T01
+    title: "Population by age & sex"
+    keywords: ["population","age","age groups","male","female","pyramid"]
+    years: [2011, 2016, 2021]
+    geo: SA2
+    shape: wide
+    columns_template: "Age_{bin}_C{yy}_{sex}"
+    bins: [0_4, 5_9, 10_14, 15_19, 20_24, 25_34, 35_44, 45_54, 55_64, 65_74, 75_84, 85over]
+    raw_file: null
+
+  - id: dwell_struct
+    table_no: T14
+    title: "Dwelling structure"
+    keywords: ["dwellings","houses","apartments","structure","separate house","semi detached","flat"]
+    years: [2011, 2016, 2021]
+    geo: SA2
+    shape: wide
+    columns_template: "Dwelling_{cat}_C{yy}"
+    cats: [Separate_house, Semi_detached, Flat_or_apartment, Other_dwelling, Not_stated]
+    raw_file: null
+
+sa2_code_hints:
+  - SA2_CODE16
+  - SA2_MAINCODE_2016
+  - SA2_CODE_2016
+  - SA2_CODE
+  - SA2_CODE21

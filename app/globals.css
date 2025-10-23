@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* Light / dark base variables (used by tokens below) */
+:root {
+  --background: #ebebeb;   /* base (light) */
+  --foreground: #171717;
+  --panel: #0f101c;        /* dark panel */
+  --textOnDark: #f1f5f9;
+  --echo-blue: #0e1a75;
+  --echo-orange: #e86017;
+  --panel-radius: 22px;
+  --panel-shadow: 0 8px 24px rgba(0,0,0,.18);
+  --dock-gap: 10px;
+  --bg-dark: #0f101c;
+  --text-on-dark: #f1f5f9;
+}
+:root{
+  --color-accent: var(--echo-orange);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f101c; /* panel for dark */
+    --foreground: #f1f5f9;
+  }
+}
+
+/* Tailwind v4 design tokens → become utility classes, e.g. bg-brand, text-brand, shadow-card, rounded-2xl */
+@theme inline {
+  /* Colors */
+  --color-brand: #0e1a75;      /* primary blue */
+  --color-accent: #e86017;     /* orange */
+  --color-base: var(--background);
+  --color-panel: var(--panel);
+  --color-textOnDark: var(--textOnDark);
+  --color-foreground: var(--foreground);
+
+  /* Radius */
+  --radius-2xl: 1.25rem;
+
+  /* Shadows */
+  --shadow-card: 0 10px 20px rgba(0,0,0,.25);
+
+  /* Fonts (optional: wire Inter via layout.tsx) */
+  /* --font-sans: var(--font-inter); */
+}
+
+/* Base element styles */
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  /* If you add Inter via next/font, uncomment next line and map --font-inter in layout.tsx */
+  /* font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; */
+}
+
+/* Handy helpers (optional) */
+.card {
+  @apply bg-white/90 dark:bg-panel/90 text-[--color-foreground] dark:text-[--color-textOnDark] rounded-2xl shadow-card;
+}

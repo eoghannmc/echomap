@@ -1,0 +1,114 @@
+datasets:
+
+  planning_zones:
+    label: "Planning Zones"
+    group: "PROPERTY"
+    source:
+      kind: "geojson"
+      paths:
+        - "data_web/geojson/planning_zones.geojson"
+      id_field: "ZONE_CODE"
+      geom_field: "geometry"
+    fields:
+      ZONE_CODE: { type: "string" }
+      ZONE_NAME: { type: "string" }
+    required_slots: []                     # can filter by area later if chosen
+    synonyms: ["zones","planning zones","GRZ","NRZ","UGZ"]
+    target: "Area"
+    tooltip:
+      fields: ["ZONE_CODE", "ZONE_NAME"]
+    style:
+      geometry: "polygon"
+      type: "categorical"                  # “bin by zone code alphabetically” → categorical
+      options:
+        category_field: "ZONE_CODE"
+        fill_opacity: 0.6
+        stroke: true
+        stroke_width: 1
+
+  dwell_struct:
+    label: "Dwelling structure"
+    group: "SOCIAL"
+    # Data comes from your census config/tables; compiler will join to SA2 polygons
+    source:
+      kind: "census_config"
+      config_path: "data_master/census/config/catalog_config.yaml"
+      id_field: "sa2_code"                 # logical id after join
+      geom_join:
+        area_type: "SA2"
+        area_table: "data_web/geojson/sa2.geojson"  # for prototyping from file
+        area_id_field: "SA2_CODE"                  # adjust to your actual code field
+    fields:
+      value:     { type: "number", unit: "dwellings" }
+      category:  { type: "string", allowed: ["Separate_house","Semi_detached","Flat_or_apartment","Other_dwelling","Not_stated"] }
+      year:      { type: "number" }
+      sa2_code:  { type: "string" }
+    required_slots:
+      - "time"
+      - "category"                         # user picks one: e.g., Separate_house
+      - "area_type"                        # SA2 (we’ll default to SA2)
+    defaults:
+      area_type: "SA2"
+    synonyms: ["dwelling","house","apartment","structure"]
+    target: "Area"
+    tooltip:
+      fields: ["sa2_name", "category", "value", "year"]
+    style:
+      geometry: "polygon"
+      type: "choropleth"
+      options:
+        field: "value"
+        bins: 5
+        classifier: "quantiles"
+        fill_opacity: 0.6
+
+  pois:
+    label: "Places (POIs by category)"
+    group: "PLACES"
+    source:
+      kind: "geojson"
+      paths:
+        - "data_web/geojson/pois.geojson"
+      id_field: "UFI"
+      geom_field: "geometry"
+    fields:
+      FTYPE: { type: "string" }
+      UFI:   { type: "string" }
+    required_slots: []                      # pill lets user constrain by FTYPE
+    synonyms: ["places","poi","amenities","category"]
+    target: "Point"
+    tooltip:
+      fields: ["FTYPE", "UFI"]
+    style:
+      geometry: "point"
+      type: "categorical"                   # color by FTYPE
+      options:
+        category_field: "FTYPE"
+        size: 6
+        cluster: false
+
+  sa2:
+    label: "SA2"
+    group: "AREA"
+    source:
+      kind: "geojson"
+      paths:
+        - "data_web/geojson/sa2.geojson"
+      id_field: "SA2_CODE"                  # adjust to your actual code
+      geom_field: "geometry"
+    fields:
+      SA2_CODE: { type: "string" }
+      SA2_NAME: { type: "string" }
+    required_slots: []
+    synonyms: ["sa2","statistical area 2"]
+    target: "Area"
+    tooltip:
+      fields: ["SA2_NAME","SA2_CODE"]
+    style:
+      geometry: "polygon"
+      type: "choropleth"                    # “binned with 5 colours”
+      options:
+        field: "SA2_CODE"                   # if numeric-like, else switch to categorical
+        bins: 5
+        classifier: "equal_interval"
+        fill_opacity: 0.15

@@ -1,0 +1,14 @@
+{
+   {
+  "terminal.integrated.defaultProfile.windows": "PowerShell (Bypass)",
+  "terminal.integrated.profiles.windows": {
+    "PowerShell (Bypass)": {
+      "path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "args": ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass"]
+    }
+  },
+  "python.defaultInterpreterPath": ".\\.venv\\Scripts\\python.exe",
+  "python.terminal.activateEnvironment": true
+}
+
+}

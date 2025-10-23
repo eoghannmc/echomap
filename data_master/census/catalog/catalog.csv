@@ -1,0 +1,4 @@
+id,table_no,title,keywords,years,geo,shape,columns_template,bins,cats
+pop_total,T01,Total persons,"population,total persons,people,residents","[2011, 2016, 2021]",SA2,scalar,Tot_persons_C{yy}_P,[],[]
+pop_age,T01,Population by age & sex,"population,age,age groups,male,female,pyramid","[2011, 2016, 2021]",SA2,wide,Age_{bin}_C{yy}_{sex},"[4, 59, 1014, 1519, 2024, 2534, 3544, 4554, 5564, 6574, 7584, ""85over""]",[]
+dwell_struct,T14,Dwelling structure,"dwellings,houses,apartments,structure,separate house,semi detached,flat","[2011, 2016, 2021]",SA2,wide,Dwelling_{cat}_C{yy},[],"[""Separate_house"", ""Semi_detached"", ""Flat_or_apartment"", ""Other_dwelling"", ""Not_stated""]"
