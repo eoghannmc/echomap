@@ -156,6 +156,8 @@ async function fetchGeoJSON(query: any): Promise<GeoJSON.FeatureCollection> {
 
 /* ===================== Main Component ===================== */
 export default function MapApp() {
+
+  
   /* App start: welcome vs. active */
   const [appStarted, setAppStarted] = useState(false);
 
@@ -167,6 +169,8 @@ export default function MapApp() {
 
   /* Only show search bar during edit when actively adding a dataset */
   const [addingDataset, setAddingDataset] = useState(false);
+
+  const [showLayers, setShowLayers] = useState(false);
 
   /* Global Location (separate from datasets) */
   const [location, setLocation] = useState<ForLocation>({
@@ -193,6 +197,7 @@ export default function MapApp() {
   const locationVerified = location.status==="verified";
   const canShowData = appStarted && !isEditing && panelOpen && allDatasetsVerified && locationVerified;
 
+  
   /* Map */
   const mapRef = useRef<MLMap | null>(null);
   const mapReady = useRef(false);
@@ -316,6 +321,22 @@ export default function MapApp() {
     }
   }, [sections]);
 
+  function LayersPanel() {
+    if (!showLayers) return null;
+    return (
+      <div className="fixed top-16 left-4 z-30 w-80 max-h-[70vh] overflow-auto bg-white/95 border rounded-2xl shadow p-3">
+        <div className="text-sm font-semibold mb-2">Layers</div>
+        {["Active","Property","Social","Infrastructure","Areas"].map(g => (
+          <div key={g} className="mb-3">
+            <div className="text-xs uppercase tracking-wide opacity-70 mb-1">{g}</div>
+            {/* your toggle rows go here */}
+          </div>
+        ))}
+      </div>
+       );
+      }
+
+
   /* Add a new empty dataset section (limited to 4) */
   function addDatasetSection() {
     if (sections.length >= 4) return;
@@ -365,7 +386,15 @@ const [layerState, setLayerState] = useState<Record<string, boolean>>(
           <div className="space-y-1">
             {active.map(l => (
               <label key={l.id} className="flex items-center justify-between gap-2 text-sm bg-white border rounded-lg px-2 py-1">
-                <span>{l.title}</span>
+                <span>{l.title}
+                <button
+                  className="px-3 py-1.5 rounded-lg border"
+                  onClick={() => setShowLayers(v => !v)}
+                  >
+                  {showLayers ? "Hide Layers" : "Layers"}
+                </button>
+
+                </span>
                 <input
                   type="checkbox"
                   checked={!!layerState[l.id]}
@@ -654,6 +683,18 @@ useEffect(() => {
     <div className="bg-white/92 backdrop-blur-sm border rounded-2xl shadow-lg p-4">
       {/* Welcome state: just the input */}
       {!appStarted && SearchRow}
+
+      <div className="w-full h-screen relative">
+        {/* Map */}
+        <div ref={mapContainer} className="absolute inset-0" />
+
+        {/* Overlays */}
+        <LayersPanel />
+
+        {/* Your search panel / summary bar etc. */}
+        {panelOpen && (/* ... */)}
+      </div>
+
 
       {/* Editing (after startup) – only when adding */}
       {appStarted && isEditing && addingDataset && SearchRow}
