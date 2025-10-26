@@ -1,0 +1,23 @@
+{
+  "name": "echo-frontend",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000"
+  },
+  "dependencies": {
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "maplibre-gl": "^5.9.0",
+    "@turf/turf": "^7.2.0",
+    "localforage": "^1.10.0",
+    "proj4": "^2.19.10",
+    "jspdf": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "typescript": "^5.9.3"
+  }
+}
