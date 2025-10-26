@@ -1,32 +1,31 @@
-:root{
-  --clr-primary:#0e1a75;     /* blue */
-  --clr-accent:#e86017;      /* orange */
-  --clr-text-on-dark:#f1f5f9;
-  --clr-bg-light:#ebebeb;
-  --clr-bg-dark:#0f101c;
+/* Order matters: tokens first */
+@import "./styles/ui-tokens.css";
 
-  /* Tag pills used earlier */
-  --pill-data:#ec4899;       /* pink-500 */
-  --pill-places:#facc15;     /* yellow-400 */
-  --pill-areas:#22c55e;      /* green-500 */
-  --pill-multi:#f97316;      /* orange-500 */
-  --pill-gray:#e5e7eb;
-}
-
-/* Optional helpers */
-.btn-primary{
-  background:var(--clr-primary); color:white;
-}
-.btn-accent{
-  background:var(--clr-accent); color:white;
-}
-.text-on-dark{ color:var(--clr-text-on-dark);}
-.bg-dark{ background:var(--clr-bg-dark);}
-.bg-light{ background:var(--clr-bg-light);}
-
-/* frontend/src/app/globals.css */
+/* Frameworks / vendor */
 @import "tailwindcss";
 @import "maplibre-gl/dist/maplibre-gl.css";
 
+/* Root layout */
 html, body, #__next { height: 100%; }
-body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+body {
+  margin: 0;
+  font-family: Helvetica, Arial, sans-serif; /* requested */
+  color: #111;
+  background: var(--color-bg);
+}
+
+/* Simple utility buttons (optional) */
+.btn-primary { background: var(--color-primary); color: #fff; }
+.btn-line    { border: 1px solid var(--color-line); background: #fff; color: #111; }
+
+/* Generic pill baseline (can be extended in components) */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 999px;
+  background: #fff;
+}

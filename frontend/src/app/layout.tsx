@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Kanit } from "next/font/google";
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 const kanit = Kanit({ subsets: ["latin"], weight: ["300","400","500","600","700"] });
 

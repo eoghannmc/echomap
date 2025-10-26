@@ -1,18 +1,42 @@
-﻿# Large geodata (keep OUT of git)
-data_master/
-data_web/geojson/
-frontend/static/data/
-*.gpkg
-*.geojson
+﻿# Node / Next.js
+node_modules
+.next
+out
+dist
+build
 
-# Node & build outputs
-node_modules/
-frontend/.next/
-server/dist/
+# Env & local configs
+.env
+.env.local
+frontend/.env.local
 
-# Python venv
+# Logs
+*.log
+logs/
+
+# OS/IDE junk
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea
+*.swp
+
+# Local data / shards (served from Supabase Storage)
+frontend/local_index/
+data/
+*.parquet
+
+# Python / legacy
 .venv/
-venv/
-
-# Local env files
-server/.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.eggs/
+*.ipynb
+scripts/
+old_python/
+legacy/
