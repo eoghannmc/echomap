@@ -43,6 +43,7 @@ html, body { background: var(--color-bg); }
   position: absolute;
   inset: 0;
   border: 5x solid var(--color-white);
+  padding: var(--gap-10);
   background: var(--color-white);
   pointer-events: auto;
 }
@@ -74,15 +75,16 @@ html, body { background: var(--color-bg); }
   border-bottom: 1px solid var(--color-line);
 }
 
-.side-panel__list { padding: 10px; position: relative; bottom:10px}
+.side-panel__list {top:20px;
+   padding: 10px; position: fixed; }
 .side-panel__item {
   display: grid;
-  min-height: 36px;
+  min-height: 25px;
   font-weight: 500;
   grid-template-columns: 16px 1fr; /* arrow left, text right */
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 16px;
+  padding: 16px 10px;
   border-bottom: 1px solid var(--color-muted);
   cursor: pointer;
   position: relative;
@@ -98,27 +100,28 @@ html, body { background: var(--color-bg); }
 
 /* Floating overlays (panel content) keep list visible underneath */
 .side-panel__overlay {
-  position: absolute;
-  left: 0; right: 0; top: 44px; bottom: 34px; /* show header + footer */
+  position: relative;
+  left: 0; right: 0; top:2px; bottom: 34px; /* show header + footer */
   background: rgba(255,255,255,0.96);
   border-left: 1px solid var(--color-muted);
   border-top: 1px solid var(--color-muted);
   z-index: 2;
   display: none;
 }
-.side-panel__overlay.is-open { display: block; }
+.side-panel__overlay.is-open { display: block;}
 .side-panel__overlay-header {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 10px; background: var(--color-white);
   border-bottom: 1px solid var(--color-muted);
 }
-.side-panel__overlay-body { padding: 10px; overflow: auto; }
+.side-panel__overlay-body { padding: 10px; overflow: auto;  min-height: 50px;
+bottom: 5px; }
 
 .side-panel__footer {
   margin-top: auto;
   border-top: 1px solid var(--color-line);
   padding: 6px 8px;
-  font-size: 12px;
+  font-size: 10px;
   text-align: right;
 }
 
@@ -163,7 +166,7 @@ html, body { background: var(--color-bg); }
   right: var(--gap-10);
   z-index: 950;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px;
+  width: 30px; height: 30px;
   border: 1px solid var(--color-line);
   border-radius: 50%;
   background: var(--color-white);
@@ -207,6 +210,6 @@ html, body { background: var(--color-bg); }
   border: 1px solid rgba(10,37,64,0.12);
   border-radius: 999px;
   padding: 2px 8px;
-  background: var(--color-white);
+  background: var(--color-mute);
   color: #111;
 }
