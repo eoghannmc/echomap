@@ -16,8 +16,9 @@ type AddressSuggest = { key: string; tag: AddressTag; label: string; lon?: numbe
 type PillSuggest    = { key: string; tag: PillTag;    label: string };
 type Suggest        = StreetSuggest | AddressSuggest | PillSuggest;
 
-/* ---------------- Config ---------------- */
+/* ---------------- Config ------- --------- */
 const SHARD_BASE = process.env.NEXT_PUBLIC_SHARD_BASE || "/local_index"; // HTTP first (Storage or /public)
+const NEXT_PUBLIC_SHARD_BASE = process.env.NEXT_PUBLIC_SHARD_BASE || "/local_index";
 const LOCAL_SHARD_DIR = process.env.LOCAL_SHARD_DIR || "";               // FS fallback (dev)
 
 const STREET_SHARD     = (ch: string) => `street_shards/${ch}.json`;
@@ -75,9 +76,9 @@ async function readJsonHttp(relPath: string, origin: string) {
 }
 
 async function readJsonFs(relPath: string) {
-  if (!LOCAL_SHARD_DIR) return null;
+  if (!NEXT_PUBLIC_SHARD_BASE) return null;
   const normalized = relPath.replace(/^\/+/, "").split("/").join(path.sep);
-  const full = path.join(LOCAL_SHARD_DIR, normalized);
+  const full = path.join(NEXT_PUBLIC_SHARD_BASE, normalized);
   try {
     const txt = await fs.readFile(full, "utf8");
     return { json: JSON.parse(txt), source: "fs" as const, where: full };
