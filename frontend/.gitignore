@@ -1,0 +1,46 @@
+﻿# --- Node / Next.js ---
+node_modules
+.next
+out
+dist
+build
+
+# --- Environment & local configs ---
+.env
+.env.local
+frontend/.env.local
+
+# --- Logs ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+logs/
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+
+# --- IDE junk ---
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea
+*.swp
+
+# --- Legacy / Python scratch ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.eggs/
+*.ipynb
+*.csv
+*.shp
+*.dbf
+*.geojson
+*.parquet
+scripts/
+old_python/
+legacy/
