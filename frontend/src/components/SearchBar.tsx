@@ -109,7 +109,7 @@ export default function SearchBar({ onSelectAddress, onSelectAny, limit = 10 }: 
           // close shortly after to allow click on item
           setTimeout(() => setOpen(false), 120);
         }}
-        autoComplete="off"
+        autoComplete="on"
       />
 
       {open && (
