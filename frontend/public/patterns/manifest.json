@@ -1,0 +1,36 @@
+{
+  "files": [
+    "diag-16-navy.png",
+    "cross-16-navy.png",
+    "dot-16-navy.png",
+    "diagGap-16-navy.png",
+    "h-16-navy.png",
+    "v-16-navy.png",
+    "diag-24-navy.png",
+    "cross-24-navy.png",
+    "dot-24-navy.png",
+    "diagGap-24-navy.png",
+    "h-24-navy.png",
+    "v-24-navy.png",
+    "diag-16-orange.png",
+    "cross-16-orange.png",
+    "dot-16-orange.png",
+    "diagGap-16-orange.png",
+    "h-16-orange.png",
+    "v-16-orange.png",
+    "diag-24-orange.png",
+    "cross-24-orange.png",
+    "dot-24-orange.png",
+    "diagGap-24-orange.png",
+    "h-24-orange.png",
+    "v-24-orange.png"
+  ],
+  "colors": [
+    "navy",
+    "orange"
+  ],
+  "sizes": [
+    16,
+    24
+  ]
+}
