@@ -1,44 +1,57 @@
-export type Tag = "Data" | "Places" | "Areas" | "Address" | "Multi";
-export type SuggestItem = { key: string; tag: Tag; label: string };
+// src/lib/suggest.ts
+export type Tag = "Address" | "Areas" | "Places" | "Data" | "Multi";
+export type SuggestItem = {
+  key: string;
+  tag: Tag;
+  label: string;
+  lon?: number | null;
+  lat?: number | null;
+  // extras for street drill-down:
+  street_key?: string;
+  locality?: string;
+  postcode?: string;
+  localities?: { locality_key: string; postcode: string; lon_c: number|null; lat_c: number|null; addr_count: number }[];
+};
 
-const API = process.env.NEXT_PUBLIC_API_BASE || "";
+const LRU = new Map<string, { t: number; data: any }>();
+const TTL = 15_000;
+const cacheGet = (k: string) => {
+  const v = LRU.get(k);
+  if (!v) return null;
+  if (Date.now() - v.t > TTL) { LRU.delete(k); return null; }
+  return v.data;
+};
+const cacheSet = (k: string, data: any) => {
+  LRU.set(k, { t: Date.now(), data });
+  if (LRU.size > 200) LRU.delete(LRU.keys().next().value);
+};
 
-// Keep one controller per call-site to cancel stale requests
-let ctrlMain: AbortController | null = null;
-let ctrlLoc: AbortController | null = null;
-
-export async function fetchMergedSuggestions(q: string): Promise<SuggestItem[]> {
-  if (ctrlMain) ctrlMain.abort();
-  ctrlMain = new AbortController();
-  const signal = ctrlMain.signal;
-
-  const wantAddr = q.trim().length >= 3;
-  const wantNonAddr = q.trim().length >= 2;
-
-  const [addrRes, genericRes] = await Promise.all([
-    wantAddr
-      ? fetch(`${API}/api/address-suggest?q=${encodeURIComponent(q)}`, { signal }).then(r => r.ok ? r.json() : { suggestions: [] })
-      : Promise.resolve({ suggestions: [] }),
-    wantNonAddr
-      ? fetch(`${API}/api/suggest?q=${encodeURIComponent(q)}`, { signal }).then(r => r.ok ? r.json() : { suggestions: [] })
-      : Promise.resolve({ suggestions: [] }),
-  ]);
-
-  const addresses: SuggestItem[] = (addrRes?.suggestions ?? []).slice(0, 3);
-  const rest: SuggestItem[] = (genericRes?.suggestions ?? []).filter((s: SuggestItem) => s.tag !== "Address");
-
-  const spaceLeft = Math.max(0, 4 - addresses.length);
-  const nonAddrPicks = rest.slice(0, spaceLeft);
-  return [...addresses, ...nonAddrPicks];
+export async function fetchGenericOnly(q: string, limit = 8, signal?: AbortSignal): Promise<SuggestItem[]> {
+  const key = `gen:${q}:${limit}`; const hit = cacheGet(key); if (hit) return hit;
+  const r = await fetch(`/api/suggest?q=${encodeURIComponent(q)}&limit=${limit}`, { signal, cache: "no-store" });
+  const data = r.ok ? await r.json() : { suggestions: [] };
+  const out = (data?.suggestions ?? []) as SuggestItem[];
+  cacheSet(key, out);
+  return out;
 }
 
-export async function fetchAddressOnly(q: string): Promise<SuggestItem[]> {
-  if (ctrlLoc) ctrlLoc.abort();
-  ctrlLoc = new AbortController();
-  const signal = ctrlLoc.signal;
-
-  if (q.trim().length < 3) return [];
-  const r = await fetch(`${API}/api/address-suggest?q=${encodeURIComponent(q)}`, { signal });
+export async function fetchStreet(q: string, limit = 12, signal?: AbortSignal): Promise<SuggestItem[]> {
+  const key = `street:${q}:${limit}`; const hit = cacheGet(key); if (hit) return hit;
+  const r = await fetch(`/api/street?q=${encodeURIComponent(q)}&limit=${limit}`, { signal, cache: "no-store" });
   const data = r.ok ? await r.json() : { suggestions: [] };
-  return (data?.suggestions ?? []).slice(0, 3);
+  const out = (data?.suggestions ?? []) as SuggestItem[];
+  cacheSet(key, out);
+  return out;
+}
+
+export async function fetchAddressLocal(street_key: string, locality_key?: string, numPrefix?: string, limit = 10, signal?: AbortSignal): Promise<SuggestItem[]> {
+  const qs = new URLSearchParams({ street: street_key, limit: String(limit) });
+  if (locality_key) qs.set("locality", locality_key);
+  if (numPrefix)   qs.set("num", numPrefix);
+  const key = `addrLocal:${qs.toString()}`; const hit = cacheGet(key); if (hit) return hit;
+  const r = await fetch(`/api/address-local?${qs.toString()}`, { signal, cache: "no-store" });
+  const data = r.ok ? await r.json() : { items: [] };
+  const out = (data?.items ?? []) as SuggestItem[];
+  cacheSet(key, out);
+  return out;
 }
