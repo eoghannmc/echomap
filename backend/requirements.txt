@@ -1,0 +1,12 @@
+﻿fastapi
+uvicorn[standard]
+pydantic
+PyYAML
+python-dotenv
+geopandas
+shapely
+pyogrio
+rtree
+numpy
+pandas
+h3
