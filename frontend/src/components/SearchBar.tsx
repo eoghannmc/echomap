@@ -65,7 +65,7 @@ export default function SearchBar({ onSelectAddress, onSelectAny, onDone, onLoad
       let nom: SuggestItem[] = [];
       if (debounced.trim().length >= 2) {
         try {
-          const raw = await nominatimSearchVic(debounced, 5, ctrl.signal);
+          const raw = await nominatimSearchVic(debounced, 5);
           nom = raw.map(nomToSuggest);
         } catch {}
       }
