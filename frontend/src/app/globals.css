@@ -1,9 +1,13 @@
-/* Order matters: tokens first */
-@import "./styles/ui-tokens.css";
+/* Tailwind must come first */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* Frameworks / vendor */
-@import "tailwindcss";
+/* Vendor CSS next */
 @import "maplibre-gl/dist/maplibre-gl.css";
+
+/* Your tokens last */
+@import "./styles/ui-tokens.css";
 
 /* Root layout */
 html, body, #__next { height: 100%; }
