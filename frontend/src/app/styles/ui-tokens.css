@@ -2,7 +2,7 @@
    UI TOKENS (GLOBAL VARIABLES)
    =============================== */
 :root {
-  /* Brand + core palette (edit these three first) */
+  /* Brand + core palette */
   --color-primary: #1a7f37;      /* Green (Primary) */
   --color-line:    #000000;      /* Black (borders/lines) */
   --color-bg:      #f7f4f2;      /* Off-white (app background) */
@@ -13,38 +13,40 @@
   --shadow-panel:  0 8px 24px rgba(0,0,0,.15);
 
   /* Layout constants */
-  --gap-5: 5px;   
+  --gap-5: 5px;
   --gap-10: 10px;
   --gap-20: 20px;
-  --gap-30: 30px; 
-  --gap-50: 50px;                         /* global gutter */
-  --panel-width: min(30vw, 600px);      /* max panel width */
-  --panel-grabber: 7px;                 /* collapsed tag width */
-  --panel-offset-ctrl: 20px;             /* map tools offset from panel edge */
+  --gap-30: 30px;
+  --gap-50: 50px;
+  --panel-width: min(30vw, 600px);
+  --panel-grabber: 7px;
+  --panel-offset-ctrl: 20px;
 
   /* Runtime (updated by React in MapApp) */
-  --dynamic-right-offset: var(--panel-grabber);  /* becomes --panel-width when open */
+  --dynamic-right-offset: var(--panel-grabber);
   --collapsed-gap-right: calc(var(--panel-grabber) + 10px);
+  --panel-footer-h: 26px; /* must match footer */
 }
 
 /* Base background */
 html, body { background: var(--color-bg); }
 
 /* ===============================
-   MAP FRAME (5px gutter + 1px border)
+   MAP FRAME (5px gutter + border)
    =============================== */
 .map-frame {
   position: fixed;
   inset: 0;
   padding: var(--gap-5);
+  
   pointer-events: none; /* allow inner to take events */
 }
 .map-inner {
   position: absolute;
   inset: 0;
-  border: 5x solid var(--color-white);
-  padding: var(--gap-10);
-  background: var(--color-white);
+  border: 1px solid var(--color-line); /* QA: fixed to 1px black border */
+  padding: var(--gap-5);
+  background: var(--color-bg);
   pointer-events: auto;
 }
 
@@ -59,7 +61,7 @@ html, body { background: var(--color-bg); }
   width: var(--panel-width);
   background: var(--color-bg);
   border: 1px solid var(--color-line);
-  transform: translateX(110%);           /* hidden by default */
+  transform: translateX(110%);
   transition: transform 220ms ease;
   display: flex;
   flex-direction: column;
@@ -75,78 +77,78 @@ html, body { background: var(--color-bg); }
   border-bottom: 1px solid var(--color-line);
 }
 
-.side-panel__list {top:20px;
-   padding: 10px; position: fixed; }
-.side-panel__item {
-  display: grid;
-  min-height: 25px;
-  font-weight: 500;
-  grid-template-columns: 16px 1fr; /* arrow left, text right */
-  align-items: center;
-  gap: 16px;
-  padding: 16px 10px;
-  border-bottom: 1px solid var(--color-muted);
-  cursor: pointer;
+/* Content provides positioning context */
+.side-panel__content {
   position: relative;
-  z-index: 1;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
-
-/* Keep overlay from altering scrollbars on the root list */
-.side-panel__list { overflow: hidden; }
-.side-panel__overlay-body { overflow: auto; }
-.chev { display: inline-block; transition: transform 160ms ease; }
-.chev.open { transform: rotate(90deg); }
-
-/* Floating overlays (panel content) keep list visible underneath */
-.side-panel__overlay {
+/* Static list */
+.side-panel__list {
   position: relative;
-  left: 0; right: 0; top:2px; bottom: 34px; /* show header + footer */
-  background: rgba(255,255,255,0.96);
+  padding-top: 6px;
+  overflow: hidden;
+}
+.side-panel__item {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 10px;
+  min-height: 36px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--color-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Overlay fills from top to footer top */
+.side-panel__overlay {
+  position: absolute;
+  left: 0; right: 0;
+  top: 0;
+  bottom: var(--panel-footer-h);
+  background: var(--color-white);
   border-left: 1px solid var(--color-muted);
   border-top: 1px solid var(--color-muted);
   z-index: 2;
-  display: none;
+  display: none;               /* base hidden */
 }
-.side-panel__overlay.is-open { display: block;}
+.side-panel__overlay.is-open {
+  display: flex;               /* QA: set flex only when open */
+  flex-direction: column;
+}
+
+/* Header stays on top and is clickable */
 .side-panel__overlay-header {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 10px; background: var(--color-white);
   border-bottom: 1px solid var(--color-muted);
-}
-.side-panel__overlay-body { padding: 10px; overflow: auto;  min-height: 50px;
-bottom: 5px; }
-
-.side-panel__footer {
-  margin-top: auto;
-  border-top: 1px solid var(--color-line);
-  padding: 6px 8px;
-  font-size: 10px;
-  text-align: right;
-}
-
-/* Collapsed grabber (7px wide, + centered) */
-.panel-grabber {
-  position: fixed;
-  top: 50%;
-  right: 15px;
-  transform: translateY(-50%);
-  width:30px;
-  height: 30px;
-  border: 1px solid var(--color-line);
-
-  background: var(--color-white);
-  border-radius: 5px;
-  box-shadow: var(--shadow-panel);
-  display: grid; place-items: center;
-  font-weight: 700;
+  flex: 0 0 auto;
   cursor: pointer;
-  z-index: 905;
+}
+
+/* Body scrolls */
+.side-panel__overlay-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 10px;
+  position: relative;
+}
+
+/* Footer must match --panel-footer-h */
+.side-panel__footer {
+  height: var(--panel-footer-h);
+  display: flex; align-items: center; justify-content: flex-end;
+  border-top: 1px solid var(--color-line);
+  padding: 0 8px;
+  font-size: 10px;
+  background: var(--color-bg);
 }
 
 /* ===============================
    MAP TOOLS DOCK (bottom-right)
-   always offset from current panel edge
    =============================== */
 .map-tools {
   position: fixed;
@@ -158,7 +160,7 @@ bottom: 5px; }
 }
 
 /* ===============================
-   TOP-RIGHT STAR MENU (account/settings)
+   TOP-RIGHT STAR MENU (toggler)
    =============================== */
 .header-star {
   position: fixed;
@@ -174,32 +176,17 @@ bottom: 5px; }
 }
 .header-star svg { width: 10px; height: 10px; }
 
-.star-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  background: var(--color-white);
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  min-width: 160px;
-  box-shadow: var(--shadow-panel);
-  padding: 6px 0;
-  display: none;
-}
-.header-star:hover + .star-menu, .star-menu:hover { display: block; }
-
 /* ===============================
    SEARCH MODAL SIZING
-   centered, respects drawer gap
    =============================== */
 .search-modal-wrap {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  top: 30%; /* ~30px lower than earlier top */
+  top: 30%;
   width: min(
     1200px,
-    calc(100vw - ((var(--gap-50) + var(--collapsed-gap-right)) + (var(--gap-50) + 10px)))
+    calc(70vw - ((var(--gap-50) + var(--collapsed-gap-right)) + (var(--gap-50) + 10px)))
   );
 }
 
@@ -210,6 +197,38 @@ bottom: 5px; }
   border: 1px solid rgba(10,37,64,0.12);
   border-radius: 999px;
   padding: 2px 8px;
-  background: var(--color-mute);
+  background: var(--color-muted); /* QA: fixed var name */
   color: #111;
+}
+
+/* Toast (below header, anchored to left) */
+.echo-toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 10%;
+  z-index: 960;
+  background: #ffffff;
+  border: 1px solid var(--color-line);
+  box-shadow: var(--shadow-panel);
+  padding: 0px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(60vw, 520px);
+  overflow: hidden;
+}
+.echo-toast .label {
+  font-size: 12px;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.echo-toast .value {
+  font-weight: 600;
+  font-size: 14px;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

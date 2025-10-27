@@ -1,135 +1,211 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { SuggestItem } from "../lib/suggest"; // assumes { key?:string; tag:string; label:string; lon?:number; lat?:number }
+import { fetchGenericOnly, fetchStreet, fetchAddressLocal, type SuggestItem } from "../lib/suggest";
+import { nominatimSearchVic, type NomPlace } from "../lib/geocode";
 
 type Props = {
   onSelectAddress?: (item: SuggestItem) => void;
   onSelectAny?: (item: SuggestItem) => void;
-  limit?: number; // UI cap; backend already caps 5
+  onDone?: () => void;                       // informs parent when user clicks Done
+  onLoadingChange?: (loading: boolean) => void; // informs parent when suggestions are fetching
 };
 
-export default function SearchBar({ onSelectAddress, onSelectAny, limit = 10 }: Props) {
+function parseInput(raw: string) {
+  const s = (raw || "").trim();
+  const m = /^(\d+[a-z0-9/.-]*)\s*([a-z].*)?$/i.exec(s);
+  if (m) {
+    const house = (m[1] || "").toLowerCase();
+    const rest  = (m[2] || "").trim();
+    const streetFrag = (rest.match(/[a-z][a-z]+/i)?.[0] ?? "").toLowerCase();
+    return { house, streetFrag, text: s };
+  }
+  const letters = (s.match(/[a-z]+/gi)?.join("") ?? "").toLowerCase();
+  return { house: "", streetFrag: letters, text: s };
+}
+
+function nomToSuggest(p: NomPlace): SuggestItem {
+  return {
+    tag: "Address",
+    key: `nom:${p.display_name}`,
+    label: p.display_name,
+    lon: Number(p.lon),
+    lat: Number(p.lat),
+    localityRaw: p.address?.state || p.address?.country || "",
+  } as unknown as SuggestItem;
+}
+
+export default function SearchBar({ onSelectAddress, onSelectAny, onDone, onLoadingChange }: Props) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<SuggestItem[]>([]);
-  const ctrlRef = useRef<AbortController | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const justPickedRef = useRef(false); // prevents immediate reopen on blur/focus race
+  const [hasPicked, setHasPicked] = useState(false);
 
+  const [nomItems, setNomItems] = useState<SuggestItem[]>([]);
+  const [echoItems, setEchoItems] = useState<SuggestItem[]>([]);
+
+  const ctrlRef = useRef<AbortController | null>(null);
   const debounced = useDebounced(q, 250);
+  const suppressRef = useRef(false); // keep dropdown closed after pick until typing
 
   useEffect(() => {
-    // don’t fetch when input empty
-    if (!debounced || debounced.trim().length < 2) {
-      ctrlRef.current?.abort();
-      setItems([]);
-      setOpen(false);
-      setLoading(false);
-      return;
-    }
+    const { house, streetFrag } = parseInput(debounced);
+    const letters = streetFrag.replace(/[^a-z]/g, "").length;
 
     ctrlRef.current?.abort();
     const ctrl = new AbortController();
     ctrlRef.current = ctrl;
+
+    let alive = true;
     setLoading(true);
+    onLoadingChange?.(true);
 
     (async () => {
-      try {
-        const url = `/api/suggest?q=${encodeURIComponent(debounced)}&limit=6`;
-        const res = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
-        if (!res.ok) throw new Error("suggest fetch failed");
-        const data = await res.json();
-        const list: SuggestItem[] = Array.isArray(data?.suggestions) ? data.suggestions : [];
-
-        // use backend’s capping; additionally cap locally if desired
-        setItems(list.slice(0, limit));
-        setOpen(list.length > 0);
-      } catch (e) {
-        if ((e as any)?.name !== "AbortError") {
-          // fail quietly; hide dropdown
-          setItems([]);
-          setOpen(false);
-        }
-      } finally {
-        setLoading(false);
+      // Nominatim (top)
+      let nom: SuggestItem[] = [];
+      if (debounced.trim().length >= 2) {
+        try {
+          const raw = await nominatimSearchVic(debounced, 5, ctrl.signal);
+          nom = raw.map(nomToSuggest);
+        } catch {}
       }
-    })();
 
-    return () => {
-      ctrl.abort();
-    };
-  }, [debounced, limit]);
+      // Echo/internal (hard cap to 1 total)
+      let out: SuggestItem[] = [];
+      if (debounced.trim().length >= 2) {
+        const gen = await fetchGenericOnly(debounced, 1, ctrl.signal).catch(() => []);
+        out = out.concat(gen);
+      }
+      if (letters >= 2) {
+        const streets = await fetchStreet(streetFrag, 1, ctrl.signal).catch(() => []);
+        out = streets.concat(out);
+        const strong = streets.find(s => (s.street_key || "").startsWith(streetFrag));
+        if (out.length < 1 && strong) {
+          const topLoc = strong.localities?.[0]?.locality_key || "";
+          if (house || streets.length <= 1) {
+            const addr = await fetchAddressLocal(
+              strong.street_key!, topLoc || undefined, house || undefined, 1, ctrl.signal
+            ).catch(() => []);
+            if (addr.length) out = addr.concat(streets, out);
+          }
+        }
+      }
+
+      if (!alive) return;
+      setNomItems(nom.slice(0, 5));
+      setEchoItems(out.slice(0, 1));
+      if (!suppressRef.current) setOpen((nom.length + out.length) > 0);
+    })()
+      .finally(() => {
+        if (alive) {
+          setLoading(false);
+          onLoadingChange?.(false);
+        }
+      });
+
+    return () => { alive = false; ctrl.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debounced]);
 
   function pick(it: SuggestItem) {
-    // prevent races with blur/focus
-    justPickedRef.current = true;
-
-    // Pass up to parent first
-    onSelectAny?.(it);
-    if (it.tag === "Address") onSelectAddress?.(it);
-
-    // Set input text to selected label (or clear if you prefer)
     setQ(it.label);
-
-    // Hard close dropdown + clear items + abort any inflight
-    ctrlRef.current?.abort();
-    setItems([]);
     setOpen(false);
+    setHasPicked(true);
+    suppressRef.current = true;
 
-    // blur input to close mobile keyboards / focus states
-    inputRef.current?.blur();
-
-    // release the guard shortly after
-    setTimeout(() => { justPickedRef.current = false; }, 150);
+    onSelectAny?.(it);
+    if (it.tag === "Address" && onSelectAddress) onSelectAddress(it);
   }
 
-  // Small tag badge
-  function TagPill({ tag }: { tag: string }) {
-    const base = "inline-flex items-center rounded-full border px-2 text-[11px]";
-    let cls = base;
-    if (tag === "Street") cls += " bg-gray-100";
-    else if (tag === "Address") cls += " bg-blue-50";
-    return <span className={cls}>{tag}</span>;
+  function handleDone() {
+    onDone?.();
   }
 
   return (
     <div className="searchbar-wrapper relative">
-      <input
-        ref={inputRef}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search: Address, Place, or Dataset"
-        className="w-width w-full rounded-xl border px-4 py-3 shadow-sm"
-        onFocus={() => {
-          if (!justPickedRef.current && items.length) setOpen(true);
-        }}
-        onBlur={() => {
-          // close shortly after to allow click on item
-          setTimeout(() => setOpen(false), 120);
-        }}
-        autoComplete="on"
-      />
+      <div className="flex items-stretch gap-2">
+        <input
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            suppressRef.current = false;
+            if (!e.target.value.trim()) {
+              setOpen(false);
+              setHasPicked(false);
+            }
+          }}
+          placeholder="Search: Address, Place, or Dataset"
+          className="w-full border px-4 py-3 shadow-sm" /* square corners via global override */
+          onFocus={() => { if (!suppressRef.current && (nomItems.length + echoItems.length)) setOpen(true); }}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          autoComplete="off"
+        />
+
+        {hasPicked && (
+          <button
+            type="button"
+            className="px-3 py-2 border bg-white hover:bg-gray-50"
+            onClick={handleDone}
+            title="Close search"
+          >
+            Done
+          </button>
+        )}
+      </div>
 
       {open && (
-        <div className="searchbar-dropdown absolute z-50 left-0 right-0 mt-2 max-h-80 overflow-auto bg-white p-1 shadow-md rounded-lg border">
+        <div className="searchbar-dropdown absolute z-50 left-0 right-0 mt-2 max-h-96 overflow-auto bg-white p-1">
           {loading && <div className="px-3 py-2 text-sm text-gray-500">Searching…</div>}
-          {!loading && items.length === 0 && <div className="px-3 py-2 text-sm text-gray-500">No results</div>}
-          <ul>
-            {items.map((it, i) => (
-              <li key={it.key ?? `${it.tag}:${i}:${it.label}`}>
-                <button
-                  className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2 rounded-md"
-                  onMouseDown={(e) => e.preventDefault()} // keep focus so click fires before blur
-                  onClick={() => pick(it)}
-                >
-                  <TagPill tag={it.tag} />
-                  <span className="truncate">{it.label}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          {!loading && nomItems.length === 0 && echoItems.length === 0 && (
+            <div className="px-3 py-2 text-sm text-gray-500">No results</div>
+          )}
+
+          {/* Nominatim */}
+          {nomItems.length > 0 && (
+            <>
+              <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-gray-500">Places</div>
+              <ul className="mb-2">
+                {nomItems.map((it) => (
+                  <li key={it.key}>
+                    <button
+                      className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pick(it)}
+                    >
+                      <span className="inline-flex items-center border px-2 text-[11px]">Address</span>
+                      <span className="truncate flex-1">{it.label}</span>
+                      <span className="locality-pill">{(it as any).localityRaw || "—"}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="px-3 pb-2 text-[10px] text-gray-500">Search powered by OpenStreetMap Nominatim</div>
+            </>
+          )}
+
+          {/* Echo (max 1) */}
+          {echoItems.length > 0 && (
+            <>
+              <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-gray-500">Echo datasets & streets</div>
+              <ul>
+                {echoItems.map((it, i) => (
+                  <li key={it.key ?? `${it.tag}-${i}-${it.label}`}>
+                    <button
+                      className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pick(it)}
+                    >
+                      <span className="inline-flex items-center border px-2 text-[11px]">
+                        {it.tag === "Areas" && (it as any).street_key ? "Street" : it.tag}
+                      </span>
+                      <span className="truncate flex-1">{it.label}</span>
+                      <span className="locality-pill">{(it as any).localityRaw || (it as any).locality || "—"}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
     </div>
