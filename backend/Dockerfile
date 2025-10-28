@@ -1,59 +1,30 @@
 # ==============================================
-# EchoApp Backend — Dockerfile (root level)
+# EchoApp Backend — Dockerfile (Ubuntu + GDAL)
 # ==============================================
-# Base image with Python 3.11
-FROM python:3.11-slim
+FROM osgeo/gdal:ubuntu-small-3.8.5
 
-# ------------------------------------------------
-# 1. Install system dependencies for GeoPandas,
-#    Pyogrio, and GeoPackage (SQLite / SpatiaLite)
-# ------------------------------------------------
+# System: Python & build tools (pip, venv, headers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gdal-bin \
-    libgdal-dev \
-    libsqlite3-0 \
-    sqlite3 \
-    libspatialite7 \
+    python3 python3-pip python3-venv python3-dev build-essential \
     libspatialindex-dev \
-    libproj-dev \
-    proj-bin \
-    gdal-data \
-    proj-data \
  && rm -rf /var/lib/apt/lists/*
 
-# ------------------------------------------------
-# 2. Create working directory
-# ------------------------------------------------
 WORKDIR /app
 
-# ------------------------------------------------
-# 3. Upgrade pip and tooling
-# ------------------------------------------------
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+# Upgrade pip tooling
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# ------------------------------------------------
-# 4. Install Python dependencies
-# ------------------------------------------------
+# Python deps
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python3 -m pip install --no-cache-dir -r requirements.txt
 
-# ------------------------------------------------
-# 5. Copy backend source code into container
-# ------------------------------------------------
-# Make sure your repo root contains:
-#   app.py, analyses_*.py, utils_*.py,
-#   census_api.py, storage_sync.py,
-#   config/master_catalog.yaml, Dockerfile, requirements.txt
+# Copy backend sources (app.py, analyses_*.py, utils_*.py, census_api.py, config/)
 COPY . .
 
-# ------------------------------------------------
-# 6. Environment and startup configuration
-# ------------------------------------------------
+# Make sure Python can import from /app
 ENV PYTHONPATH=/app
 ENV PORT=8080
 EXPOSE 8080
 
-# ------------------------------------------------
-# 7. Run the FastAPI app via Uvicorn
-# ------------------------------------------------
-CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "debug"]
+# Run FastAPI
+CMD ["python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "debug"]
