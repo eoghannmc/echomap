@@ -1,0 +1,366 @@
+# config/master_catalog.yaml
+datasets:
+
+  # ----- ACTIVE (defaults that turn on after search) -----
+  # SA2: disable for now (no SA2 analyzer yet)
+  sa2:
+    label: SA2 Boundaries
+    group: Active
+    defaultOn: false
+    defaultClip: HexR8K4
+    source: { kind: placeholder }
+    style:
+      geometry: polygon
+      type: outline
+      options: { line_color: "#333", line_width: 1 }
+
+  rail_active:
+    label: Rail (active)
+    group: Active
+    defaultOn: true
+    defaultClip: HexR8K10
+    source: { kind: analyzer, endpoint: /analyze/trains_h3, band_index: 2 }
+    style:
+      geometry: line
+      type: line
+      options: { color: "#111", width: 1.2 }
+
+    # 1) Society → Population (mesh blocks choropleth)
+  population_mesh:
+    label: Population
+    group: Society
+    defaultOn: false
+    defaultClip: HexR8K2
+    source:
+      kind: analyzer
+      endpoint: /analyze/meshprops_h3
+      subset: mesh
+    style:
+      geometry: polygon
+      type: choropleth
+      options:
+        field: pop                # uses feature.properties.pop
+        bins: 6
+        classifier: equal         # equal interval
+        fill_opacity: 0.5
+        ramp: ["#eaf5ef","#cfe9d8","#a9d4bd","#7dbb9d","#4f9b7a","#1a7f37"]  # light → dark
+    tooltip:
+      fields:
+        - { key: "pop", label: "Population" }
+
+  # 2) Property → Density (mesh blocks choropleth using 'dw' values)
+  density_mesh:
+    label: Density
+    group: Property
+    defaultOn: false
+    defaultClip: HexR8K2
+    source:
+      kind: analyzer
+      endpoint: /analyze/meshprops_h3
+      subset: mesh
+    style:
+      geometry: polygon
+      type: choropleth
+      options:
+        field: dw                 # uses feature.properties.dw
+        bins: 6
+        classifier: equal
+        fill_opacity: 0.5
+        ramp: ["#fde8df","#f6c8ae","#ec9e77","#dc6f3e","#bf4d1b","#c4572b"]   # light → dark
+    tooltip:
+      fields:
+        - { key: "dw", label: "Density" }
+
+  # 3) Property → Parcels (outline-only of all properties in clip)
+  parcel:
+    label: Parcel
+    group: Property
+    defaultOn: false
+    defaultClip: HexR8K2
+    source:
+      kind: analyzer
+      endpoint: /analyze/meshprops_h3
+      subset: properties
+    style:
+      geometry: polygon
+      type: outline
+      options:
+        line_color: "#555"
+        line_width: 1.0
+        fill_opacity: 0.0
+        
+
+  # 4) Property → Site (single property containing the focus point)
+  site:
+    label: Site
+    group: Property
+    defaultOn: false
+    defaultClip: HexHome
+    source:
+      kind: analyzer
+      endpoint: /analyze/meshprops_h3
+      subset: site                  # <-- we’ll add this small output server-side
+    style:
+      geometry: polygon
+      type: outline
+      options:
+        line_color: "#de1414"
+        line_width: 2.0
+        fill_opacity: 0.0
+
+
+  # ⛔️ Removed duplicate short planning_zone block here
+
+  planning_zone:
+    label: Planning Zone
+    group: Active
+    defaultOn: true
+    defaultClip: HexR8K4
+    source: { kind: analyzer, endpoint: /analyze/zones_h3 }
+    filters:
+      - key: ZONE_CODE
+        type: category
+        options: [GRZ, GRZ1, GRZ2, GRZ3, GRZ4, GRZ5, GRZ6, GRZ7, GRZ8, GRZ9, GRZ10, GRZ11, GRZ12, GRZ13, GRZ14, GRZ15, GRZ16, GRZ17, GRZ18,
+                  NRZ1, NRZ2, NRZ3, NRZ4, NRZ5, NRZ6, NRZ7, NRZ8, NRZ9, NRZ10, NRZ11, NRZ12, NRZ14,
+                  RGZ, RGZ1, RGZ2, RGZ3, RGZ4, RGZ5, RGZ6, RGZ7, RGZ8, RGZ9,
+                  LDRZ, LDRZ1, LDRZ2, LDRZ3, LDRZ4, LDRZ5,
+                  ACZ1, ACZ2, ACZ3, MUZ, MUZ1, MUZ2, MUZ3, MUZ4,
+                  CCZ1, CCZ2, CCZ3, CCZ4, CCZ5, CCZ6, CCZ7,
+                  DZ1, DZ2, DZ3, DZ4, DZ5, DZ6, DZ7,
+                  CDZ1, CDZ2, CDZ3, CDZ4, CDZ5, CDZ6, PDZ, PDZ1, PDZ2,
+                  IN1Z, IN2Z, IN3Z,
+                  B1Z, B2Z, B3Z, B4Z, B5Z, C1Z, C2Z,
+                  TRZ1, TRZ2, TRZ3, TRZ4,
+                  FZ, FZ1, FZ2, FZ3, FZ4,
+                  GWZ, GWZ1, GWZ2, GWZ3, GWZ4, GWZ5, GWZ6, GWAZ, GWAZ1, GWAZ2, GWAZ4, GWAZ5, GWAZ6,
+                  RLZ, RLZ1, RLZ2, RLZ3, RLZ4, RLZ5,
+                  RAZ, RAZ1, RAZ2, RAZ3,
+                  RCZ, RCZ1, RCZ2, RCZ3, RCZ4, RCZ5, RCZ6, RCZ7, RCZ8, RCZ9, RCZ10, RCZ11, RCZ12, RCZ13, RCZ14, RCZ15,
+                  TZ, TZ1, TZ2,
+                  UGZ, UGZ1, UGZ2, UGZ3, UGZ4, UGZ5, UGZ6, UGZ7, UGZ8, UGZ9, UGZ10, UGZ11, UGZ12, UGZ13, UGZ14, UGZ15, UGZ16,
+                  UFZ,
+                  PPRZ, PCRZ, PUZ1, PUZ2, PUZ3, PUZ5, PUZ6, PUZ7,
+                  SUZ1, SUZ2, SUZ3, SUZ4, SUZ5, SUZ6, SUZ7, SUZ8, SUZ9, SUZ10, SUZ11, SUZ12, SUZ13, SUZ14, SUZ15, SUZ16, SUZ17,
+                  CA, PZ]
+        groups:
+          General Residential:        [GRZ, GRZ1, GRZ2, GRZ3, GRZ4, GRZ5, GRZ6, GRZ7, GRZ8, GRZ9, GRZ10, GRZ11, GRZ12, GRZ13, GRZ14, GRZ15, GRZ16, GRZ17, GRZ18]
+          Neighbourhood Residential:  [NRZ1, NRZ2, NRZ3, NRZ4, NRZ5, NRZ6, NRZ7, NRZ8, NRZ9, NRZ10, NRZ11, NRZ12, NRZ14]
+          Residential Growth:         [RGZ, RGZ1, RGZ2, RGZ3, RGZ4, RGZ5, RGZ6, RGZ7, RGZ8, RGZ9]
+          Low Density Residential:    [LDRZ, LDRZ1, LDRZ2, LDRZ3, LDRZ4, LDRZ5]
+          Mixed Use / Activity:       [ACZ1, ACZ2, ACZ3, MUZ, MUZ1, MUZ2, MUZ3, MUZ4]
+          Central City:               [CCZ1, CCZ2, CCZ3, CCZ4, CCZ5, CCZ6, CCZ7]
+          Docklands:                  [DZ1, DZ2, DZ3, DZ4, DZ5, DZ6, DZ7]
+          Development / Priority:     [CDZ1, CDZ2, CDZ3, CDZ4, CDZ5, CDZ6, PDZ, PDZ1, PDZ2]
+          Industrial:                 [IN1Z, IN2Z, IN3Z]
+          Commercial:                 [B1Z, B2Z, B3Z, B4Z, B5Z, C1Z, C2Z]
+          Transport:                  [TRZ1, TRZ2, TRZ3, TRZ4]
+          Farming:                    [FZ, FZ1, FZ2, FZ3, FZ4]
+          Green Wedge:                [GWZ, GWZ1, GWZ2, GWZ3, GWZ4, GWZ5, GWZ6, GWAZ, GWAZ1, GWAZ2, GWAZ4, GWAZ5, GWAZ6]
+          Rural Living:               [RLZ, RLZ1, RLZ2, RLZ3, RLZ4, RLZ5]
+          Rural Activity:             [RAZ, RAZ1, RAZ2, RAZ3]
+          Rural Conservation:         [RCZ, RCZ1, RCZ2, RCZ3, RCZ4, RCZ5, RCZ6, RCZ7, RCZ8, RCZ9, RCZ10, RCZ11, RCZ12, RCZ13, RCZ14, RCZ15]
+          Township:                   [TZ, TZ1, TZ2]
+          Urban Growth:               [UGZ, UGZ1, UGZ2, UGZ3, UGZ4, UGZ5, UGZ6, UGZ7, UGZ8, UGZ9, UGZ10, UGZ11, UGZ12, UGZ13, UGZ14, UGZ15, UGZ16]
+          Urban Floodway:             [UFZ]
+          Public / Community / Open:  [PPRZ, PCRZ, PUZ1, PUZ2, PUZ3, PUZ5, PUZ6, PUZ7]
+          Special Use:                [SUZ1, SUZ2, SUZ3, SUZ4, SUZ5, SUZ6, SUZ7, SUZ8, SUZ9, SUZ10, SUZ11, SUZ12, SUZ13, SUZ14, SUZ15, SUZ16, SUZ17]
+          Commonwealth:               [CA]
+          Port:                       [PZ]
+    style:
+      geometry: polygon
+      type: categorical
+      options:
+        field: ZONE_CODE
+        fill_opacity: 0.6
+        default_color: "#cccccc"
+        color_map:
+          # Residential
+          GRZ:  "#66bb66"
+          GRZ1: "#66bb66"
+          GRZ2: "#66bb66"
+          GRZ3: "#66bb66"
+          GRZ4: "#66bb66"
+          GRZ5: "#66bb66"
+          GRZ6: "#66bb66"
+          GRZ7: "#66bb66"
+          GRZ8: "#66bb66"
+          GRZ9: "#66bb66"
+          GRZ10: "#66bb66"
+          GRZ11: "#66bb66"
+          GRZ12: "#66bb66"
+          GRZ13: "#66bb66"
+          GRZ14: "#66bb66"
+          GRZ15: "#66bb66"
+          GRZ16: "#66bb66"
+          GRZ17: "#66bb66"
+          GRZ18: "#66bb66"
+          NRZ1: "#99cc99"
+          NRZ2: "#99cc99"
+          NRZ3: "#99cc99"
+          NRZ4: "#99cc99"
+          NRZ5: "#99cc99"
+          NRZ6: "#99cc99"
+          NRZ7: "#99cc99"
+          NRZ8: "#99cc99"
+          NRZ9: "#99cc99"
+          NRZ10: "#99cc99"
+          NRZ11: "#99cc99"
+          NRZ12: "#99cc99"
+          NRZ14: "#99cc99"
+          RGZ: "#339966"
+          RGZ1: "#339966"
+          RGZ2: "#339966"
+          RGZ3: "#339966"
+          RGZ4: "#339966"
+          RGZ5: "#339966"
+          RGZ6: "#339966"
+          RGZ7: "#339966"
+          RGZ8: "#339966"
+          RGZ9: "#339966"
+          LDRZ: "#cce5cc"
+          LDRZ1: "#cce5cc"
+          LDRZ2: "#cce5cc"
+          LDRZ3: "#cce5cc"
+          LDRZ4: "#cce5cc"
+          LDRZ5: "#cce5cc"
+          # Industrial / Commercial
+          IN1Z: "#999966"
+          IN2Z: "#999966"
+          IN3Z: "#999966"
+          B1Z: "#996633"
+          B2Z: "#996633"
+          B3Z: "#996633"
+          B4Z: "#996633"
+          B5Z: "#996633"
+          C1Z: "#996633"
+          C2Z: "#996633"
+          # Development / Growth / Transport
+          CDZ1: "#4da6ff"
+          CDZ2: "#4da6ff"
+          CDZ3: "#4da6ff"
+          CDZ4: "#4da6ff"
+          CDZ5: "#4da6ff"
+          CDZ6: "#4da6ff"
+          PDZ: "#4da6ff"
+          PDZ1: "#4da6ff"
+          PDZ2: "#4da6ff"
+          UGZ: "#64b5f6"
+          UGZ1: "#64b5f6"
+          UGZ2: "#64b5f6"
+          UGZ3: "#64b5f6"
+          UGZ4: "#64b5f6"
+          UGZ5: "#64b5f6"
+          UGZ6: "#64b5f6"
+          UGZ7: "#64b5f6"
+          UGZ8: "#64b5f6"
+          UGZ9: "#64b5f6"
+          UGZ10: "#64b5f6"
+          UGZ11: "#64b5f6"
+          UGZ12: "#64b5f6"
+          UGZ13: "#64b5f6"
+          UGZ14: "#64b5f6"
+          UGZ15: "#64b5f6"
+          UGZ16: "#64b5f6"
+          TRZ1: "#b3b3b3"
+          TRZ2: "#b3b3b3"
+          TRZ3: "#b3b3b3"
+          TRZ4: "#b3b3b3"
+          # Rural / Farming
+          FZ: "#d4e157"
+          FZ1: "#d4e157"
+          FZ2: "#d4e157"
+          FZ3: "#d4e157"
+          FZ4: "#d4e157"
+          RLZ: "#a1887f"
+          RLZ1: "#a1887f"
+          RLZ2: "#a1887f"
+          RLZ3: "#a1887f"
+          RLZ4: "#a1887f"
+          RLZ5: "#a1887f"
+          RAZ: "#bcaaa4"
+          RAZ1: "#bcaaa4"
+          RAZ2: "#bcaaa4"
+          RAZ3: "#bcaaa4"
+          RCZ: "#8d6e63"
+          RCZ1: "#8d6e63"
+          RCZ2: "#8d6e63"
+          RCZ3: "#8d6e63"
+          RCZ4: "#8d6e63"
+          RCZ5: "#8d6e63"
+          RCZ6: "#8d6e63"
+          RCZ7: "#8d6e63"
+          RCZ8: "#8d6e63"
+          RCZ9: "#8d6e63"
+          RCZ10: "#8d6e63"
+          RCZ11: "#8d6e63"
+          RCZ12: "#8d6e63"
+          RCZ13: "#8d6e63"
+          RCZ14: "#8d6e63"
+          RCZ15: "#8d6e63"
+          # Other
+          TZ: "#aed581"
+          TZ1: "#aed581"
+          TZ2: "#aed581"
+          GWZ: "#a5d6a7"
+          GWZ1: "#a5d6a7"
+          GWZ2: "#a5d6a7"
+          GWZ3: "#a5d6a7"
+          GWZ4: "#a5d6a7"
+          GWZ5: "#a5d6a7"
+          GWZ6: "#a5d6a7"
+          GWAZ: "#a5d6a7"
+          GWAZ1: "#a5d6a7"
+          GWAZ2: "#a5d6a7"
+          GWAZ4: "#a5d6a7"
+          GWAZ5: "#a5d6a7"
+          GWAZ6: "#a5d6a7"
+          PPRZ: "#81c784"
+          PCRZ: "#81c784"
+          PUZ1: "#81c784"
+          PUZ2: "#81c784"
+          PUZ3: "#81c784"
+          PUZ5: "#81c784"
+          PUZ6: "#81c784"
+          PUZ7: "#81c784"
+          SUZ1: "#ffcc80"
+          SUZ2: "#ffcc80"
+          SUZ3: "#ffcc80"
+          SUZ4: "#ffcc80"
+          SUZ5: "#ffcc80"
+          SUZ6: "#ffcc80"
+          SUZ7: "#ffcc80"
+          SUZ8: "#ffcc80"
+          SUZ9: "#ffcc80"
+          SUZ10: "#ffcc80"
+          SUZ11: "#ffcc80"
+          SUZ12: "#ffcc80"
+          SUZ13: "#ffcc80"
+          SUZ14: "#ffcc80"
+          SUZ15: "#ffcc80"
+          SUZ16: "#ffcc80"
+          SUZ17: "#ffcc80"
+          CA:  "#b0bec5"
+          PZ:  "#8eacbb"
+          CCZ1: "#2e5984"
+          CCZ2: "#2e5984"
+          CCZ3: "#2e5984"
+          CCZ4: "#2e5984"
+          CCZ5: "#2e5984"
+          CCZ6: "#2e5984"
+          CCZ7: "#2e5984"
+          DZ1: "#2e5984"
+          DZ2: "#2e5984"
+          DZ3: "#2e5984"
+          DZ4: "#2e5984"
+          DZ5: "#2e5984"
+          DZ6: "#2e5984"
+          DZ7: "#2e5984"
+          ACZ1: "#6c91bf"
+          ACZ2: "#6c91bf"
+          ACZ3: "#6c91bf"
+          MUZ: "#6c91bf"
+          MUZ1: "#6c91bf"
+          MUZ2: "#6c91bf"
+          MUZ3: "#6c91bf"
+          MUZ4: "#6c91bf"
+          UFZ: "#4fc3f7"

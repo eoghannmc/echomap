@@ -8,6 +8,7 @@ from functools import lru_cache
 import h3
 import pyogrio
 from pyproj import Transformer
+from shapely.geometry import Point
 
 MASTER = Path("data_master/master.gpkg")
 TARGET_EPSG = 7855  # GDA2020 / MGA55
@@ -206,9 +207,31 @@ class MeshPropsAnalysisH3:
         vmin = float(vals.min()) if len(mesh_gdf) else 0.0
         vmax = float(vals.max()) if len(mesh_gdf) else 0.0
 
+
+        # --- Site: parcel containing focus point (use WGS84 to avoid extra transforms)
+        
+        focus_pt = Point(center_lon, center_lat)
+        site_feat = None
+        for _, r in prop_out.iterrows():  # prop_out is WGS84 already
+            geom = r.geometry
+            if geom is not None and not geom.is_empty and geom.contains(focus_pt):
+                site_feat = {
+                    "type": "Feature",
+                    "geometry": geom.__geo_interface__,
+                    "properties": {}
+                }
+                break
+
+        site_fc = {"type":"FeatureCollection","features":[site_feat]} if site_feat else {"type":"FeatureCollection","features":[]}
+
+       
+        
+
+
         return {
             "mesh": {"type":"FeatureCollection","features": mesh_feats},
             "properties": {"type":"FeatureCollection","features": prop_feats},
+            "site": site_fc,
             "mask": _geom_to_fc_wgs84(mask_poly),
             "summary": {
                 "mesh_count": len(mesh_feats),
