@@ -1,0 +1,4 @@
+id,table_no,title,keywords,years,geo,shape,columns_template
+pop_age, T01, "Selected Person Characteristics — age by sex", "population,persons,age,sex", "[2011,2016,2021]", SA2, "wide", "Age_{bin}_C{yy}_{sex}"
+pop_total, T01, "Total persons", "population,total persons,people", "[2011,2016,2021]", SA2, "scalar", "Tot_persons_C{yy}_{sex}"
+dwelling_struct, T14, "Dwelling structure", "dwellings,house,apartment,semi,structure", "[2011,2016,2021]", SA2, "wide", "Dwelling_{cat}_C{yy}"
