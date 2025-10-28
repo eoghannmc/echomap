@@ -107,11 +107,15 @@ class ZonesAnalysisH3:
         clip_geom = clip_geom.simplify(1.0, preserve_topology=True)
         minx, miny, maxx, maxy = clip_geom.bounds
 
+        layer = 'planning_zones'
+
         # Read only bbox from the GPKG
         cols = ["ZONE_CODE", "ZONE_NAME", "geometry"]
         gdf = pyogrio.read_dataframe(
-            MASTER, layer="planning_zones",
-            columns=cols, bbox=(minx, miny, maxx, maxy)
+            MASTER,
+            layer='planning_zones',
+            columns=cols, 
+            bbox=(minx, miny, maxx, maxy)
         )
         if gdf.crs:
             gdf = gdf.to_crs(TARGET_EPSG)
