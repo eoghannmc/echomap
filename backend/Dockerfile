@@ -8,12 +8,15 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
-COPY requirements.txt .
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
-ENV PYTHONPATH=/app
+# copy backend sources
+COPY backend/ .
+# copy config (for master_catalog.yaml)
+COPY config/ ./config/
 
+ENV PYTHONPATH=/app
 ENV PORT=8080
 EXPOSE 8080
 
