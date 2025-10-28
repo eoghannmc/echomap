@@ -2,7 +2,7 @@ from pyproj import Transformer
 from shapely.geometry import Point
 from shapely import difference
 
-TARGET_EPSG = 7855  # GDA2020 / MGA Zone 55
+TARGET_EPSG = 7855  # GDA2020  / MGA Zone 55
 
 _to_metric = Transformer.from_crs(4326, TARGET_EPSG, always_xy=True)
 _to_wgs84  = Transformer.from_crs(TARGET_EPSG, 4326, always_xy=True)

@@ -1,49 +1,53 @@
-# backend/analyses_trains.py
 from pathlib import Path
-from typing import List, Set, Tuple
-import pandas as pd
+from typing import List, Set, Tuple, Dict, Any, Optional
+
 import geopandas as gpd
+import pandas as pd
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
-import h3
 from pyproj import Transformer
+import h3
 
-MASTER = Path(r"data_master/master.gpkg")   # authoritative (EPSG:7855)
-TARGET_EPSG = 7855
+MASTER = Path("data_master/master.gpkg")
+TARGET_EPSG = 7855  # GDA2020 / MGA55
 
-# transformers
+# Fast transforms
 to_wgs84  = Transformer.from_crs(TARGET_EPSG, 4326, always_xy=True)
 to_metric = Transformer.from_crs(4326, TARGET_EPSG, always_xy=True)
 
-# ---------- H3 helpers ----------
+
+# ------------------------------ H3 helpers ------------------------------
 def _geo_to_cell(lat: float, lon: float, res: int) -> str:
-    # v3 vs v4 compatibility
+    """h3 v3 vs v4 compatibility."""
     if hasattr(h3, "geo_to_h3"):
-        return h3.geo_to_h3(lat, lon, res)     # v3
-    return h3.latlng_to_cell(lat, lon, res)    # v4
+        return h3.geo_to_h3(lat, lon, res)          # v3
+    return h3.latlng_to_cell(lat, lon, res)         # v4
 
 def _disk(cell: str, k: int) -> Set[str]:
+    """Return the k-ring including center (v3/v4 compatible)."""
     if hasattr(h3, "k_ring"):
-        return set(h3.k_ring(cell, k))         # v3
-    return set(h3.grid_disk(cell, k))          # v4
+        return set(h3.k_ring(cell, k))               # v3
+    return set(h3.grid_disk(cell, k))                # v4
 
-def _boundary(cell: str):
+def _boundary(cell: str) -> List[Tuple[float, float]]:
+    """Return boundary as list of (lon, lat) pairs."""
     if hasattr(h3, "h3_to_geo_boundary"):
-        latlon = h3.h3_to_geo_boundary(cell, geo_json=True)  # [[lat, lon], ...]
-        return [(lng, lat) for lat, lng in latlon]
-    latlng = h3.cell_to_boundary(cell)                         # [(lat, lng), ...]
+        latlon = h3.h3_to_geo_boundary(cell, geo_json=True)
+        return [(lng, lat) for lat, lng in latlon]   # (lon, lat)
+    latlng = h3.cell_to_boundary(cell)
     return [(lng, lat) for (lat, lng) in latlng]
 
-def hex_polygon_metric(cell: str) -> Polygon:
+def _hex_polygon_metric(cell: str) -> Polygon:
+    """Hexagon polygon in target metric CRS (EPSG:7855)."""
     pts = [to_metric.transform(lon, lat) for (lon, lat) in _boundary(cell)]
     return Polygon(pts)
 
-def hex_disk_and_rings(center_lon: float, center_lat: float, res: int, k: int):
-    """Return (center_cell, disk_cells, rings) where rings[d] = set of cells at distance d."""
+def _disk_and_rings(center_lon: float, center_lat: float, res: int, k: int) -> Tuple[str, Set[str], List[Set[str]]]:
+    """Return (center_cell, disk_cells, rings_list[0..k])."""
     center_cell = _geo_to_cell(center_lat, center_lon, res)
-    disk_cells = _disk(center_cell, k)
-    rings = []
-    prev = set()
+    disk_cells  = _disk(center_cell, k)
+    rings: List[Set[str]] = []
+    prev: Set[str] = set()
     for d in range(0, k + 1):
         incl = _disk(center_cell, d)
         ring_d = {center_cell} if d == 0 else incl - prev
@@ -51,105 +55,120 @@ def hex_disk_and_rings(center_lon: float, center_lat: float, res: int, k: int):
         prev = incl
     return center_cell, disk_cells, rings
 
-# ---------- GeoJSON helper ----------
-def _geom_to_wgs84_fc(geom):
-    """Return a WGS84 FeatureCollection for a metric geom (Polygon/MultiPolygon)."""
-    from shapely.geometry import Polygon, MultiPolygon
-    geoms = [geom] if isinstance(geom, Polygon) else list(geom.geoms)
-    feats = []
-    for g in geoms:
-        if g.is_empty:
-            continue
-        # exterior only for speed
-        coords = []
-        for x, y in list(g.exterior.coords):
-            lon, lat = to_wgs84.transform(x, y)
-            coords.append([lon, lat])
-        feats.append({
-            "type": "Feature",
-            "geometry": {"type": "Polygon", "coordinates": [coords]},
-            "properties": {}
-        })
-    return {"type": "FeatureCollection", "features": feats}
 
-# ---------- Analysis ----------
-class TrainAnalysis:
-    def __init__(self):
-        metro = gpd.read_file(MASTER, layer="metro_stations")
-        regional = gpd.read_file(MASTER, layer="regional_stations")
+# ------------------------------ Analysis ------------------------------
+class TrainAnalysisH3:
+    """
+    H3-based train station selection.
 
-        # Ensure metric CRS
-        if metro.crs is None or metro.crs.to_epsg() != TARGET_EPSG:
+    Reads `metro_stations` + `regional_stations` from MASTER (GPKG), reprojects to EPSG:7855
+    on first use, then for a given center + (res,k) builds:
+      - an H3 disk mask polygon (union of all hexes up to k),
+      - per-ring polygons (0..k),
+      - selects stations intersecting the chosen geometry (disk or a specific ring/band).
+
+    Returns a FeatureCollection (stations as points in WGS84), the mask polygon, and a summary.
+    """
+
+    def __init__(self) -> None:
+        self._gdf: Optional[gpd.GeoDataFrame] = None       # EPSG:7855
+        self._sindex: Any = None
+
+    # ----------- loading -----------
+    def _load(self) -> None:
+        """Lazy-load stations from the GPKG; raise RuntimeError if unreadable."""
+        if self._gdf is not None:
+            return
+
+        try:
+            metro    = gpd.read_file(MASTER, layer="metro_stations")
+            regional = gpd.read_file(MASTER, layer="regional_stations")
+        except Exception as e:
+            # This bubbles up as a JSON error from the route handler
+            raise RuntimeError(f"Failed to read {MASTER} (train layers): {e}")
+
+        # Reproject (or set) to EPSG:7855
+        if metro.crs:
+            metro = metro.to_crs(TARGET_EPSG)
+        else:
             metro = metro.set_crs(TARGET_EPSG, allow_override=True)
-        if regional.crs is None or regional.crs.to_epsg() != TARGET_EPSG:
+        if regional.crs:
+            regional = regional.to_crs(TARGET_EPSG)
+        else:
             regional = regional.set_crs(TARGET_EPSG, allow_override=True)
 
-        self.gdf = pd.concat([metro, regional], ignore_index=True)
-        self.sindex = self.gdf.sindex  # spatial index
+        # Concatenate + drop empties
+        all_stations = pd.concat([metro, regional], ignore_index=True)
+        all_stations = all_stations.loc[~all_stations.geometry.is_empty]
 
+        self._gdf = all_stations
+        self._sindex = self._gdf.sindex
+
+    # ----------- run -----------
     def run(
         self,
         center_lon: float,
         center_lat: float,
         res: int = 8,
         k: int = 4,
-        band_index: int = 4,
-        select_mode: str = "disk",   # "disk" or "ring"
-        disk_k: int | None = None
-    ):
-        # 1) H3 disk/rings geometry in metric CRS
-        _, disk_cells, rings = hex_disk_and_rings(center_lon, center_lat, res, k)
-        disk_poly = unary_union([hex_polygon_metric(c) for c in disk_cells])
-        ring_polys = [unary_union([hex_polygon_metric(c) for c in ring]) for ring in rings]
+        band_index: int = 2,
+        select_mode: str = "disk",   # "disk" or "band"
+        disk_k: Optional[int] = None # override when select_mode="disk"
+    ) -> Dict[str, Any]:
+        """
+        center_lon/lat  : map focus
+        res, k          : H3 parameters
+        band_index      : which ring to return if select_mode='band'
+        select_mode     : 'disk' => union of rings [0..disk_k], 'band' => ring[band_index]
+        disk_k          : optional override for disk depth (default uses band_index)
+        """
+        self._load()
 
-        # 2) Candidate stations within the disk (fast prefilter)
-        candidates = self.gdf[self.gdf.geometry.intersects(disk_poly)]
+        center_cell, disk_cells, rings = _disk_and_rings(center_lon, center_lat, res, k)
+        disk_poly  = unary_union([_hex_polygon_metric(c) for c in disk_cells])
+        ring_polys = [unary_union([_hex_polygon_metric(c) for c in ring]) for ring in rings]
 
-        # 3) counts per ring
-        counts = []
-        per_ring_idx = []
-        for d, ring_poly in enumerate(ring_polys):
-            mask = candidates.geometry.intersects(ring_poly)
-            idxs = candidates.index[mask].tolist()
-            per_ring_idx.append(idxs)
-            counts.append({"ring_distance": d, "count": len(idxs)})
-
-        # 4) choose what to RETURN: disk(0..dk) or single ring(bi)
+        # Choose mask geometry
         bi = max(0, min(band_index, k))
         if select_mode == "disk":
             dk = bi if disk_k is None else max(0, min(disk_k, k))
-            idxs = sorted(set().union(*per_ring_idx[: dk + 1]))
-            selection_mask_geom = unary_union(ring_polys[: dk + 1])
+            mask_geom = unary_union(ring_polys[: dk + 1])
         else:
-            idxs = per_ring_idx[bi]
-            selection_mask_geom = ring_polys[bi]
+            mask_geom = ring_polys[bi]
 
-        # 5) features as WGS84 points
-        sel = self.gdf.loc[idxs].copy().to_crs(4326)
-        feats = []
-        for _, r in sel.iterrows():
-            p = r.geometry
+        # Spatial prefilter by intersection with mask
+        candidates = self._gdf[self._gdf.geometry.intersects(mask_geom)]
+
+        # Build WGS84 outputs
+        feats: List[Dict[str, Any]] = []
+        for _, row in candidates.to_crs(4326).iterrows():
+            geom = row.geometry
+            if geom.is_empty:
+                continue
             feats.append({
                 "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [p.x, p.y]},
-                "properties": {
-                    "STOP_NAME": r.get("STOP_NAME"),
-                    "ROUTEUSSP": r.get("ROUTEUSSP"),
-                    "STOP_ID":  r.get("STOP_ID")
-                }
+                "geometry": {"type": "Point", "coordinates": [geom.x, geom.y]},
+                "properties": {k: row.get(k) for k in row.index if k != "geometry"}
             })
 
-        # 6) WGS84 mask polygon for drawing
-        mask_fc = _geom_to_wgs84_fc(selection_mask_geom)
+        # Make WGS84 mask polygon
+        mask_coords = []
+        for x, y in list(mask_geom.exterior.coords):
+            lon, lat = to_wgs84.transform(x, y)
+            mask_coords.append([lon, lat])
+
+        mask_fc = {"type": "FeatureCollection",
+                   "features": [{"type": "Feature",
+                                 "geometry": {"type": "Polygon", "coordinates": [mask_coords]},
+                                 "properties": {}}]}
 
         return {
             "features": {"type": "FeatureCollection", "features": feats},
+            "mask": mask_fc,
             "summary": {
-                "counts": counts,
+                "count": len(feats),
                 "select_mode": select_mode,
                 "ring_selected": bi,
-                "disk_k": disk_k if disk_k is not None else bi,
-                "h3": {"res": res, "k": k}
+                "h3": {"res": res, "k": k},
             },
-            "mask": mask_fc
         }
