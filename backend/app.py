@@ -11,8 +11,49 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import yaml
+from functools import lru_cache
+from fastapi import HTTPException
 
-load_dotenv(Path(__file__).parent / ".env")
+
+# --- analyzers ---
+from analyses_trains_h3 import TrainAnalysisH3
+from analyses_meshprops_h3 import MeshPropsAnalysisH3
+from analyses_pois_h3 import POIsAnalysisH3
+from analyses_zones_h3 import ZonesAnalysisH3
+from census_api import router as census_router
+
+@lru_cache(maxsize=1)
+def get_trains() -> TrainAnalysisH3:
+    try:
+        return TrainAnalysisH3()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Trains analyzer init failed: {e}")
+
+@lru_cache(maxsize=1)
+def get_meshprops() -> MeshPropsAnalysisH3:
+    try:
+        return MeshPropsAnalysisH3()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MeshProps init failed: {e}")
+
+@lru_cache(maxsize=1)
+def get_pois() -> POIsAnalysisH3:
+    try:
+        return POIsAnalysisH3()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"POIs init failed: {e}")
+
+@lru_cache(maxsize=1)
+def get_zones() -> ZonesAnalysisH3:
+    try:
+        return ZonesAnalysisH3()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Zones init failed: {e}")
+
+
+
+
+
 
 # Optional: pull data from Supabase on boot
 if os.environ.get("BOOTSTRAP_FROM_SUPABASE", "false").lower() == "true":
@@ -23,23 +64,9 @@ if os.environ.get("BOOTSTRAP_FROM_SUPABASE", "false").lower() == "true":
     except Exception as e:
         print(f"[app] storage sync failed: {e}")
 
-# --- analyzers ---
-from analyses_trains_h3 import TrainAnalysisH3
-from analyses_meshprops_h3 import MeshPropsAnalysisH3
-from analyses_pois_h3 import POIsAnalysisH3
-from analyses_zones_h3 import ZonesAnalysisH3
-from census_api import router as census_router
 
 
 
-
-if os.environ.get("BOOTSTRAP_FROM_SUPABASE", "false").lower() == "true":
-    try:
-        from storage_sync import sync as storage_sync  # no dot
-        storage_sync()
-        print("[app] storage sync complete")
-    except Exception as e:
-        print(f"[app] storage sync failed: {e}")
 
 
 MASTER_GPKG = Path("data_master/master.gpkg")
@@ -101,7 +128,7 @@ class TrainsReq(HexClip):
 @app.post("/analyze/zones_h3")
 def analyze_zones_h3(req: ZonesReq):
     try:
-        out = _zones.run(
+        out = get_zones().run(
             center_lon=req.center_lon,
             center_lat=req.center_lat,
             res=req.res,
@@ -122,7 +149,7 @@ def analyze_zones_h3(req: ZonesReq):
 def analyze_meshprops_h3(req: MeshPropsReq):
     try:
         k = req.k if (req.disk_k is None) else req.disk_k
-        return _meshprops.run(center_lon=req.center_lon, center_lat=req.center_lat, res=req.res, disk_k=k)
+        return get_meshprops().run(center_lon=req.center_lon, center_lat=req.center_lat, res=req.res, disk_k=k)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -130,7 +157,7 @@ def analyze_meshprops_h3(req: MeshPropsReq):
 def analyze_pois_h3(req: POIsReq):
     try:
         k = req.k if (req.disk_k is None) else req.disk_k
-        return _pois.run(center_lon=req.center_lon, center_lat=req.center_lat, res=req.res, disk_k=k, include_ftypes=req.include_ftypes)
+        return get_pois().run(center_lon=req.center_lon, center_lat=req.center_lat, res=req.res, disk_k=k, include_ftypes=req.include_ftypes)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

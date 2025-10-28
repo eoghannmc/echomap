@@ -2,6 +2,28 @@
 import os, json, time, hashlib, pathlib, urllib.request, urllib.error
 # add at the top of storage_sync.py
 from pathlib import Path
+
+# in storage_sync.py after _download_object(...)
+import binascii
+
+def _download_object(path_remote: str, dest_local: pathlib.Path, remote_info: dict = None):
+    url = _url_object(RAW_BUCKET, path_remote)
+    dest_local.parent.mkdir(parents=True, exist_ok=True)
+    req = urllib.request.Request(url, headers=HEADERS)
+    with urllib.request.urlopen(req) as resp, open(dest_local, "wb") as f:
+        data = resp.read()
+        if resp.status != 200:
+            raise RuntimeError(f"Storage GET {url} -> HTTP {resp.status}: {data[:200]!r}")
+        f.write(data)
+    # quick magic check for GPKG (SQLite header)
+    if dest_local.suffix.lower() in ('.gpkg', '.sqlite', '.db'):
+        with open(dest_local, 'rb') as fh:
+            hdr = fh.read(16)
+        if not hdr.startswith(b'SQLite format 3'):
+            print(f"[storage_sync] WARN: {dest_local} does not look like SQLite (header={binascii.hexlify(hdr)[:32]})")
+    print(f"[storage_sync] downloaded {path_remote} -> {dest_local} ({dest_local.stat().st_size} bytes)")
+
+
 try:
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).parent / ".env")
