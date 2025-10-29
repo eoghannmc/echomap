@@ -9,7 +9,7 @@ import { DataDrawer, ExportModal, InputModal, LayersPanel } from "@/components/P
 
 type Panel = null | "layers" | "export" | "data" | "input";
 
-export  function MapPage() {
+export default function MapPage() {
   const [activePanel, setActivePanel] = useState<Panel>(null);
   const [loading, setLoading] = useState(false);
   const [headerVisible, setHeaderVisible] = useState(true);

@@ -1,10 +1,8 @@
 {
   "scripts": {
-    "dev": "concurrently \"npm:dev:server\" \"npm:dev:frontend\"",
-    "dev:frontend": "next dev \"./frontend\" -p 3000",
-    "dev:server": "concurrently \"tsc -p server/tsconfig.json -w\" \"nodemon --watch server/dist --ext js --exec node server/dist/index.js\"",
-    "build": "next build \"./frontend\" && tsc -p server/tsconfig.json",
-    "start": "concurrently \"node server/dist/index.js\" \"next start ./frontend\""
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.15",
