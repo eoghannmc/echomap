@@ -1,0 +1,52 @@
+# Docker
+Dockerfile
+.dockerignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data files (not needed in container)
+data_master/
+data_web/
+frontend/
+
+# Logs
+*.log
+
+# Node
+node_modules/
+package-lock.json
+
+# Environment (will be set via Railway)
+.env.local
+.env.development
+.env.production
+
+# Documentation
+README.md
+*.md
+tree_view.txt
+folder_inventory.txt
+treeView.txt

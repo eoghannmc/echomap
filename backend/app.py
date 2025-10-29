@@ -172,6 +172,19 @@ app.include_router(census_router, prefix="")
 
 @app.get("/healthz")
 def healthz():
-    ok = MASTER_GPKG.exists()
-    return {"ok": ok, "gpkg": str(MASTER_GPKG), "catalog": str(CATALOG_PATH)}
+    # Check if PostGIS connection works
+    try:
+        analyzer = get_postgis()
+        return {
+            "ok": True, 
+            "postgis": "connected",
+            "catalog": str(CATALOG_PATH)
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": str(e),
+            "catalog": str(CATALOG_PATH)
+        }
+
 
