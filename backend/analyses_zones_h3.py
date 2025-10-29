@@ -9,7 +9,16 @@ from functools import lru_cache
 import pyogrio
 from pyogrio import errors as pyogrio_errors  # NEW: to catch bad GPKG
 
-MASTER = Path(r"data_master/master.gpkg")
+# ORIGINAL GEOPACKAGE APPROACH (commented out for now, using GeoJSON instead)
+# MASTER = Path(r"data_master/master.gpkg")
+
+# NEW: GeoJSON file paths
+GEOJSON_DIR = Path("data_web/geojson")
+GEOJSON_FILES = {
+    "planning_zones": GEOJSON_DIR / "planning_zones.geojson",
+    "sa2": GEOJSON_DIR / "sa2.geojson",
+}
+
 TARGET_EPSG = 7855
 
 to_wgs84  = Transformer.from_crs(TARGET_EPSG, 4326, always_xy=True)
@@ -86,6 +95,7 @@ class ZonesAnalysisH3:
         max_features: int = 1500,
         clip_mode: str = "disk",
         disk_k: int | None = None,
+        layer: str = "planning_zones",  # NEW: support "planning_zones" or "sa2"
     ) -> dict:
         _, ring_polys = _disk_ring_polys(center_lon, center_lat, res, k)
         bi = max(0, min(band_index, k))
@@ -98,26 +108,54 @@ class ZonesAnalysisH3:
         clip_geom = clip_geom.smooth if False else clip_geom  # no-op: keep your current simplify below
         minx, miny, maxx, maxy = clip_geom.bounds
 
-        cols = ["ZONE_CODE", "ZONE_NAME", "geometry"]
+        # ORIGINAL GEOPACKAGE APPROACH (commented out)
+        # cols = ["ZONE_CODE", "ZONE_NAME", "geometry"]
+        # try:
+        #     gdf = pyogrio.read_dataframe(
+        #         MASTER,
+        #         layer="planning_zones",
+        #         columns=cols,
+        #         bbox=(minx, miny, maxx, maxy),
+        #     )
+        # except pyogrio_errors.DataSourceError as e:
+        #     raise RuntimeError(f"Failed to read {MASTER} (planning_zones): {e}")
+        # except Exception as e:
+        #     raise RuntimeError(f"GPKG read error: {e}")
+
+        # NEW: GeoJSON approach
+        if layer == "sa2":
+            # SA2 GeoJSON only has geometry, no attributes
+            cols = ["geometry"]
+            code_col = None
+            name_col = None
+        else:  # planning_zones
+            # Planning zones GeoJSON only has ZONE_CODE, no ZONE_NAME
+            cols = ["ZONE_CODE", "geometry"]
+            code_col = "ZONE_CODE"
+            name_col = None
+        
         try:
-            gdf = pyogrio.read_dataframe(
-                MASTER,
-                layer="planning_zones",
-                columns=cols,
-                bbox=(minx, miny, maxx, maxy),
-            )
-        except pyogrio_errors.DataSourceError as e:
-            raise RuntimeError(f"Failed to read {MASTER} (planning_zones): {e}")  # let route return 500
+            geojson_path = GEOJSON_FILES.get(layer, GEOJSON_DIR / f"{layer}.geojson")
+            gdf = gpd.read_file(geojson_path, bbox=(minx, miny, maxx, maxy))
+            # Select only needed columns if they exist
+            available_cols = [c for c in cols if c in gdf.columns]
+            if available_cols and len(available_cols) < len(gdf.columns):
+                gdf = gdf[available_cols]
+        except FileNotFoundError as e:
+            raise RuntimeError(f"GeoJSON file not found: {geojson_path}: {e}")
         except Exception as e:
-            raise RuntimeError(f"GPKG read error: {e}")
+            raise RuntimeError(f"GeoJSON read error: {e}")
 
         if gdf.crs:
             gdf = gdf.to_crs(TARGET_EPSG)
         else:
             gdf = gdf.set_crs(TARGET_EPSG, allow_override=True)
 
-        if zone_codes:
-            gdf = gdf[gdf["ZONE_CODE"].isin(zone_codes)]
+        # ORIGINAL: if zone_codes:
+        #     gdf = gdf[gdf["ZONE_CODE"].isin(zone_codes)]
+        # NEW: Use dynamic column names
+        if zone_codes and code_col in gdf.columns:
+            gdf = gdf[gdf[code_col].isin(zone_codes)]
 
         gdf = gdf[gdf.geometry.intersects(clip_geom)]
         if gdf.empty:
@@ -149,10 +187,17 @@ class ZonesAnalysisH3:
                 continue
             if geom.is_empty:
                 continue
+            # ORIGINAL: "properties": {"ZONE_CODE": r.get("ZONE_CODE"), "ZONE_NAME": r.get("ZONE_NAME")},
+            # NEW: Use dynamic column names for both planning_zones and sa2
+            props = {}
+            if code_col in r.index:
+                props[code_col] = r.get(code_col)
+            if name_col in r.index:
+                props[name_col] = r.get(name_col)
             feats.append({
                 "type": "Feature",
                 "geometry": geom.__geo_interface__,
-                "properties": {"ZONE_CODE": r.get("ZONE_CODE"), "ZONE_NAME": r.get("ZONE_NAME")},
+                "properties": props,
             })
 
         return {

@@ -16,39 +16,54 @@ from fastapi import HTTPException
 
 
 # --- analyzers (package-relative imports) ---
-from .analyses_trains_h3 import TrainAnalysisH3
-from .analyses_meshprops_h3 import MeshPropsAnalysisH3
-from .analyses_pois_h3 import POIsAnalysisH3
-from .analyses_zones_h3 import ZonesAnalysisH3
+# ORIGINAL: GeoPackage/GeoJSON-based analyzers (commented out)
+# from .analyses_trains_h3 import TrainAnalysisH3
+# from .analyses_meshprops_h3 import MeshPropsAnalysisH3
+# from .analyses_pois_h3 import POIsAnalysisH3
+# from .analyses_zones_h3 import ZonesAnalysisH3
+
+# NEW: PostGIS-based analyzer
+from .analyses_postgis import PostGISAnalyzer
+
 from .census_api import router as census_router
 
-@lru_cache(maxsize=1)
-def get_trains() -> TrainAnalysisH3:
-    try:
-        return TrainAnalysisH3()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Trains analyzer init failed: {e}")
+# ORIGINAL analyzer factories (commented out for now)
+# @lru_cache(maxsize=1)
+# def get_trains() -> TrainAnalysisH3:
+#     try:
+#         return TrainAnalysisH3()
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Trains analyzer init failed: {e}")
 
+# NEW: PostGIS analyzer factory
 @lru_cache(maxsize=1)
-def get_meshprops() -> MeshPropsAnalysisH3:
+def get_postgis() -> PostGISAnalyzer:
     try:
-        return MeshPropsAnalysisH3()
+        return PostGISAnalyzer()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"MeshProps init failed: {e}")
+        raise HTTPException(status_code=500, detail=f"PostGIS analyzer init failed: {e}")
 
-@lru_cache(maxsize=1)
-def get_pois() -> POIsAnalysisH3:
-    try:
-        return POIsAnalysisH3()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"POIs init failed: {e}")
+# Comment out old analyzer factories
+# @lru_cache(maxsize=1)
+# def get_meshprops() -> MeshPropsAnalysisH3:
+#     try:
+#         return MeshPropsAnalysisH3()
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"MeshProps init failed: {e}")
 
-@lru_cache(maxsize=1)
-def get_zones() -> ZonesAnalysisH3:
-    try:
-        return ZonesAnalysisH3()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Zones init failed: {e}")
+# @lru_cache(maxsize=1)
+# def get_pois() -> POIsAnalysisH3:
+#     try:
+#         return POIsAnalysisH3()
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"POIs init failed: {e}")
+
+# @lru_cache(maxsize=1)
+# def get_zones() -> ZonesAnalysisH3:
+#     try:
+#         return ZonesAnalysisH3()
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Zones init failed: {e}")
 
 
 
@@ -118,15 +133,16 @@ class TrainsReq(HexClip):
 
 @app.post("/analyze/zones_h3")
 def analyze_zones_h3(req: ZonesReq):
+    """Query planning zones or SA2 boundaries from PostGIS"""
     try:
-        out = get_zones().run(
+        out = get_postgis().query_zones(
             center_lon=req.center_lon,
             center_lat=req.center_lat,
             res=req.res,
             k=req.k,
             band_index=req.band_index,
             clip_mode=req.clip_mode,
-            # layer=req.layer,  # <-- remove this line
+            layer=req.layer,  # "planning_zones" or "sa2"
             zone_codes=req.codes,
             simplify_tolerance_m=req.simplify_tolerance_m,  
         )
@@ -134,29 +150,20 @@ def analyze_zones_h3(req: ZonesReq):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-
-
 @app.post("/analyze/meshprops_h3")
 def analyze_meshprops_h3(req: MeshPropsReq):
+    """Query mesh blocks (parcels) from PostGIS"""
     try:
         k = req.k if (req.disk_k is None) else req.disk_k
-        return get_meshprops().run(center_lon=req.center_lon, center_lat=req.center_lat, res=req.res, disk_k=k)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-@app.post("/analyze/pois_h3")
-def analyze_pois_h3(req: POIsReq):
-    try:
-        k = req.k if (req.disk_k is None) else req.disk_k
-        return get_pois().run(center_lon=req.center_lon, center_lat=req.center_lat, res=req.res, disk_k=k, include_ftypes=req.include_ftypes)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-@app.post("/analyze/trains_h3")
-def analyze_trains_h3(req: TrainsReq):
-    try:
-        return get_trains().run(center_lon=req.center_lon, center_lat=req.center_lat, res=req.res, k=req.k, band_index=req.band_index)
-
+        out = get_postgis().query_meshprops(
+            center_lon=req.center_lon,
+            center_lat=req.center_lat,
+            res=req.res,
+            k=req.k,
+            which=req.which,
+            disk_k=k,
+        )
+        return out
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -167,3 +174,4 @@ app.include_router(census_router, prefix="")
 def healthz():
     ok = MASTER_GPKG.exists()
     return {"ok": ok, "gpkg": str(MASTER_GPKG), "catalog": str(CATALOG_PATH)}
+

@@ -845,10 +845,10 @@ export default function MapApp() {
                 <img
                   src="/icons/echologo5.png"
                   alt="Echo"
-                  width={20}
-                  height={20}
+                  width={30}
+                  height={30}
                   className={`echo-logo ${searchLoading ? "spin" : ""}`}
-                  style={{ width: 20, height: 20, display: "block" }}
+                  style={{ width: 30, height: 30, display: "block" }}
                   decoding="async"
                   loading="eager"
                 />

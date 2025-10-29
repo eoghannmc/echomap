@@ -10,7 +10,16 @@ import pyogrio
 from pyproj import Transformer
 from shapely.geometry import Point
 
-MASTER = Path("data_master/master.gpkg")
+# ORIGINAL GEOPACKAGE APPROACH (commented out for now, using GeoJSON instead)
+# MASTER = Path("data_master/master.gpkg")
+
+# NEW: GeoJSON file paths
+GEOJSON_DIR = Path("data_web/geojson")
+GEOJSON_FILES = {
+    "parcels": GEOJSON_DIR / "vic_properties.geojson",
+    "mesh_blocks": GEOJSON_DIR / "mesh_blocks.geojson",
+}
+
 TARGET_EPSG = 7855  # GDA2020 / MGA55
 
 to_wgs84  = Transformer.from_crs(TARGET_EPSG, 4326, always_xy=True)
@@ -66,14 +75,34 @@ class MeshPropsAnalysisH3:
     clips them to a hex mask (home hex only by default), simplifies lightly,
     and returns WGS84 GeoJSON FeatureCollections.
     """
-    def __init__(self, master_path: Path = MASTER):
-        self.master = master_path
+    def __init__(self):
+        pass  # No master_path needed with GeoJSON approach
 
     # ---- internal I/O ----
+    # ORIGINAL GEOPACKAGE APPROACH (commented out)
+    # def _read_clip(self, layer: str, mask_poly: Polygon, columns=None) -> gpd.GeoDataFrame:
+    #     minx, miny, maxx, maxy = mask_poly.bounds
+    #     g = pyogrio.read_dataframe(self.master, layer=layer, columns=columns, bbox=(minx, miny, maxx, maxy))
+    #     if g.crs:
+    #         g = g.to_crs(TARGET_EPSG)
+    #     else:
+    #         g = g.set_crs(TARGET_EPSG, allow_override=True)
+    #     mask_gdf = gpd.GeoDataFrame(geometry=[mask_poly], crs=f"EPSG:{TARGET_EPSG}")
+    #     g = gpd.clip(g, mask_gdf)
+    #     g = g.loc[~g.geometry.is_empty]
+    #     return g
+    
+    # NEW: GeoJSON approach
     def _read_clip(self, layer: str, mask_poly: Polygon, columns=None) -> gpd.GeoDataFrame:
         minx, miny, maxx, maxy = mask_poly.bounds
-        # bbox is in layer CRS; ETL should have written TARGET_EPSG
-        g = pyogrio.read_dataframe(self.master, layer=layer, columns=columns, bbox=(minx, miny, maxx, maxy))
+        # Read from GeoJSON file
+        geojson_path = GEOJSON_FILES.get(layer, GEOJSON_DIR / f"{layer}.geojson")
+        g = gpd.read_file(geojson_path, bbox=(minx, miny, maxx, maxy))
+        
+        # Select columns if specified
+        if columns and all(c in g.columns or c == 'geometry' for c in columns):
+            g = g[columns]
+        
         if g.crs:
             g = g.to_crs(TARGET_EPSG)
         else:
