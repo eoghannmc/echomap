@@ -295,7 +295,7 @@ export default function MapApp() {
 
   /* ============== Backend Layer Functions ============== */
   const BACKEND_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+    process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
   // Get current map center for backend queries
   const getMapCenter = () => {
