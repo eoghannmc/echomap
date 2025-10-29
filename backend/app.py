@@ -83,6 +83,13 @@ app.add_middleware(
 # lazily instantiate analyzers on first request. This prevents import-time failures
 # when data files (e.g. data_master/master.gpkg) are missing or environment isn't ready.
 
+# Singletons
+_h3_trains  = TrainAnalysisH3()
+_meshprops  = MeshPropsAnalysisH3()
+_pois       = POIsAnalysisH3()
+_zones      = ZonesAnalysisH3()
+
+
 # ---------- config endpoint ----------
 CATALOG_PATH = Path(os.environ.get("MASTER_CATALOG_PATH", "config/master_catalog.yaml"))
 
@@ -160,6 +167,8 @@ def analyze_pois_h3(req: POIsReq):
 def analyze_trains_h3(req: TrainsReq):
     try:
         return get_trains().run(center_lon=req.center_lon, center_lat=req.center_lat, res=req.res, k=req.k, band_index=req.band_index)
+
+        # return _h3_trains.run(center_lon=req.center_lon, center_lat=req.center_lat, res=req.res, k=req.k, band_index=req.band_index)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
