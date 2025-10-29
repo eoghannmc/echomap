@@ -114,6 +114,18 @@ export default function MapApp() {
   const [location, setLocation] = useState<LocationState>({ mode: 'idle', status: 'input' });
   const [sections, setSections] = useState<DatasetSection[]>([]);
 
+  // Backend layer toggles and state
+  const [layersEnabled, setLayersEnabled] = useState({
+    planning: false,
+    parcels: false,
+    sa2: false
+  });
+  const [layersLoading, setLayersLoading] = useState({
+    planning: false,
+    parcels: false,
+    sa2: false
+  });
+
   // Simple modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTablesModal, setShowTablesModal] = useState(false);
@@ -182,6 +194,259 @@ export default function MapApp() {
   const toggleOverlay = (tab: Exclude<PanelTab, null>) =>
     setOverlayTab(prev => (prev === tab ? null : tab));
   const togglePanel = () => setPanelOpen(v => !v);
+
+  /* ============== Backend Layer Functions ============== */
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+
+  // Get current map center for backend queries
+  const getMapCenter = () => {
+    const map = mapRef.current;
+    if (!map) return { lat: -37.8136, lon: 144.9631 };
+    const center = map.getCenter();
+    return { lat: center.lat, lon: center.lng };
+  };
+
+  // Fetch and add planning zones
+  // Fetch and add planning zones layer
+  const loadPlanningLayer = useCallback(async () => {
+    const map = mapRef.current;
+    if (!map) return;
+    
+    setLayersLoading(prev => ({ ...prev, planning: true }));
+    try {
+      const { lat, lon } = getMapCenter();
+      const response = await fetch(`${BACKEND_URL}/analyze/zones_h3`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          center_lat: lat,
+          center_lon: lon,
+          layer: 'planning_zones',
+          res: 8,
+          k: 4,
+          band_index: 2,
+          clip_mode: 'disk'
+        })
+      });
+      
+      if (!response.ok) throw new Error(`Planning zones API error: ${response.status}`);
+      const data = await response.json();
+
+      if (!map.getSource('planning-zones')) {
+        map.addSource('planning-zones', {
+          type: 'geojson',
+          data: data.features
+        });
+        map.addLayer({
+          id: 'planning-fill',
+          type: 'fill',
+          source: 'planning-zones',
+          layout: {
+            'visibility': 'visible'
+          },
+          paint: {
+            'fill-color': ['match', ['get', 'ZONE_CODE'],
+              'RES1', '#FFA500',
+              'COM1', '#FF6B6B',
+              'IND1', '#4ECDC4',
+              '#888888'
+            ],
+            'fill-opacity': 0.3
+          }
+        });
+        map.addLayer({
+          id: 'planning-outline',
+          type: 'line',
+          source: 'planning-zones',
+          layout: {
+            'visibility': 'visible'
+          },
+          paint: {
+            'line-color': '#333',
+            'line-width': 1.5
+          }
+        });
+      } else {
+        (map.getSource('planning-zones') as any).setData(data.features);
+      }
+      
+      console.log('[Planning] Loaded:', data.summary);
+    } catch (error) {
+      console.error('[Planning] Error:', error);
+      alert('Failed to load planning zones. Make sure backend is running on port 8000.');
+    } finally {
+      setLayersLoading(prev => ({ ...prev, planning: false }));
+    }
+  }, []);
+
+  // Fetch and add property parcels layer
+  const loadParcelsLayer = useCallback(async () => {
+    const map = mapRef.current;
+    if (!map) return;
+    
+    setLayersLoading(prev => ({ ...prev, parcels: true }));
+    try {
+      const { lat, lon } = getMapCenter();
+      const response = await fetch(`${BACKEND_URL}/analyze/meshprops_h3`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          center_lat: lat,
+          center_lon: lon,
+          which: 'parcels',
+          res: 9,
+          disk_k: 0
+        })
+      });
+      
+      if (!response.ok) throw new Error(`Parcels API error: ${response.status}`);
+      const data = await response.json();
+
+      if (!map.getSource('parcels')) {
+        map.addSource('parcels', {
+          type: 'geojson',
+          data: data.properties || data.features
+        });
+        map.addLayer({
+          id: 'parcels-outline',
+          type: 'line',
+          source: 'parcels',
+          layout: {
+            'visibility': 'visible'
+          },
+          paint: {
+            'line-color': '#8B4513',
+            'line-width': 1
+          }
+        });
+      } else {
+        (map.getSource('parcels') as any).setData(data.properties || data.features);
+      }
+      
+      console.log('[Parcels] Loaded:', data.summary);
+    } catch (error) {
+      console.error('[Parcels] Error:', error);
+      alert('Failed to load property parcels. Make sure backend is running.');
+    } finally {
+      setLayersLoading(prev => ({ ...prev, parcels: false }));
+    }
+  }, []);
+
+  // Fetch and add SA2 boundaries layer
+  const loadSA2Layer = useCallback(async () => {
+    const map = mapRef.current;
+    if (!map) return;
+    
+    setLayersLoading(prev => ({ ...prev, sa2: true }));
+    try {
+      const { lat, lon } = getMapCenter();
+      const response = await fetch(`${BACKEND_URL}/analyze/zones_h3`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          center_lat: lat,
+          center_lon: lon,
+          layer: 'sa2',
+          res: 8,
+          k: 4,
+          band_index: 2,
+          clip_mode: 'disk'
+        })
+      });
+      
+      if (!response.ok) throw new Error(`SA2 API error: ${response.status}`);
+      const data = await response.json();
+
+      if (!map.getSource('sa2')) {
+        map.addSource('sa2', {
+          type: 'geojson',
+          data: data.features
+        });
+        map.addLayer({
+          id: 'sa2-fill',
+          type: 'fill',
+          source: 'sa2',
+          layout: {
+            'visibility': 'visible'
+          },
+          paint: {
+            'fill-color': '#3498db',
+            'fill-opacity': 0.2
+          }
+        });
+        map.addLayer({
+          id: 'sa2-outline',
+          type: 'line',
+          source: 'sa2',
+          layout: {
+            'visibility': 'visible'
+          },
+          paint: {
+            'line-color': '#2c3e50',
+            'line-width': 2
+          }
+        });
+      } else {
+        (map.getSource('sa2') as any).setData(data.features);
+      }
+      
+      console.log('[SA2] Loaded:', data.summary);
+    } catch (error) {
+      console.error('[SA2] Error:', error);
+      alert('Failed to load SA2 boundaries. Make sure backend is running.');
+    } finally {
+      setLayersLoading(prev => ({ ...prev, sa2: false }));
+    }
+  }, []);
+
+  // Toggle layer visibility
+  const toggleLayer = useCallback((layerKey: keyof typeof layersEnabled) => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const newEnabled = !layersEnabled[layerKey];
+    setLayersEnabled(prev => ({ ...prev, [layerKey]: newEnabled }));
+
+    const layerIds: Record<string, string[]> = {
+      planning: ['planning-fill', 'planning-outline'],
+      parcels: ['parcels-outline'],
+      sa2: ['sa2-fill', 'sa2-outline']
+    };
+
+    if (newEnabled) {
+      // Check if layers already exist
+      const layersExist = layerIds[layerKey]?.every(id => map.getLayer(id));
+      
+      if (layersExist) {
+        // Just show existing layers
+        layerIds[layerKey]?.forEach(id => {
+          map.setLayoutProperty(id, 'visibility', 'visible');
+        });
+      } else {
+        // Load data and create layers
+        switch (layerKey) {
+          case 'planning':
+            loadPlanningLayer();
+            break;
+          case 'parcels':
+            loadParcelsLayer();
+            break;
+          case 'sa2':
+            loadSA2Layer();
+            break;
+        }
+      }
+    } else {
+      // Hide layer
+      layerIds[layerKey]?.forEach(id => {
+        if (map.getLayer(id)) {
+          map.setLayoutProperty(id, 'visibility', 'none');
+        }
+      });
+    }
+  }, [layersEnabled, loadPlanningLayer, loadParcelsLayer, loadSA2Layer]);
+
+  /* ============== Original Handlers ============== */
 
   const handlePick = useCallback((it: SuggestItem) => {
     if (it.tag === 'Address') {
@@ -434,17 +699,48 @@ export default function MapApp() {
                 <span className="chev-ico open" /> <strong>Layers</strong>
               </div>
               <div className="side-panel__overlay-body">
-                <div className="mb-2 text-sm font-semibold">Group Header</div>
+                <div className="mb-2 text-sm font-semibold text-slate-700">Map Layers</div>
+                
                 <label className="flex items-center gap-2 mb-3">
-                  <input type="checkbox" onChange={() => {/* TODO toggle layer 1 */}} />
-                  <span>Layer 1</span>
+                  <input 
+                    type="checkbox" 
+                    checked={layersEnabled.planning}
+                    disabled={layersLoading.planning}
+                    onChange={() => toggleLayer('planning')}
+                  />
+                  <span className={layersLoading.planning ? 'text-gray-400' : ''}>
+                    Planning Zones {layersLoading.planning && '(loading...)'}
+                  </span>
                 </label>
 
-                <div className="mb-2 text-sm font-semibold">Group Header 2</div>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" onChange={() => {/* TODO toggle layer 2 */}} />
-                  <span>Layer 2</span>
+                <label className="flex items-center gap-2 mb-3">
+                  <input 
+                    type="checkbox" 
+                    checked={layersEnabled.parcels}
+                    disabled={layersLoading.parcels}
+                    onChange={() => toggleLayer('parcels')}
+                  />
+                  <span className={layersLoading.parcels ? 'text-gray-400' : ''}>
+                    Property Parcels {layersLoading.parcels && '(loading...)'}
+                  </span>
                 </label>
+
+                <label className="flex items-center gap-2 mb-3">
+                  <input 
+                    type="checkbox" 
+                    checked={layersEnabled.sa2}
+                    disabled={layersLoading.sa2}
+                    onChange={() => toggleLayer('sa2')}
+                  />
+                  <span className={layersLoading.sa2 ? 'text-gray-400' : ''}>
+                    SA2 Boundaries {layersLoading.sa2 && '(loading...)'}
+                  </span>
+                </label>
+
+                <div className="mt-4 p-2 text-xs text-slate-500 bg-slate-50 rounded">
+                  <strong>Note:</strong> Layers are loaded based on current map center. 
+                  Move the map and re-toggle to update data.
+                </div>
               </div>
             </div>
 

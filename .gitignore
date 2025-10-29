@@ -40,3 +40,4 @@ __pycache__/
 scripts/
 old_python/
 legacy/
+*.gpkg
