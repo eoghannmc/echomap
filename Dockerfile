@@ -1,4 +1,5 @@
-# Use Ubuntu 22.04 for better GDAL/PostGIS support
+# EchoApp Backend — Dockerfile (Ubuntu + GDAL)
+# ==============================================
 FROM ubuntu:22.04
 
 # Set environment variables
@@ -8,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 # Set working directory
 WORKDIR /app
 
-# Install Python and system dependencies for GeoPandas
+# Install Python and build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.11 \
     python3.11-dev \
