@@ -1,30 +1,49 @@
-# ==============================================
 # EchoApp Backend — Dockerfile (Ubuntu + GDAL)
 # ==============================================
-FROM osgeo/gdal:ubuntu-small-3.8.5
+FROM ubuntu:22.04
 
-# System: Python & build tools (pip, venv, headers)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-venv python3-dev build-essential \
-    libspatialindex-dev \
- && rm -rf /var/lib/apt/lists/*
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 
+# Set working directory
 WORKDIR /app
 
-# Upgrade pip tooling
-RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+# Install Python and build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
+    gdal-bin \
+    libgdal-dev \
+    libspatialindex-dev \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
-# Python deps
+# Set GDAL environment variables
+ENV GDAL_CONFIG=/usr/bin/gdal-config
+ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
+ENV C_INCLUDE_PATH=/usr/include/gdal
+
+# Create symlinks for python3.11
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python
+
+# Copy requirements first for better caching
 COPY requirements.txt .
-RUN python3 -m pip install --no-cache-dir -r requirements.txt
 
-# Copy backend sources (app.py, analyses_*.py, utils_*.py, census_api.py, config/)
-COPY . .
+# Install Python dependencies
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Make sure Python can import from /app
-ENV PYTHONPATH=/app
-ENV PORT=8080
-EXPOSE 8080
+# Copy backend code
+COPY . ./backend/
 
-# Run FastAPI
-CMD ["python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "debug"]
+# Copy config directory (already part of . copy above, but explicit for clarity)
+# Config is already included in the COPY . above
+
+# Expose port (Railway will set PORT env var)
+EXPOSE 8000
+
+# Run the application
+CMD ["sh", "-c", "uvicorn backend.app:app --host 0.0.0.0 --port ${PORT:-8000}"]

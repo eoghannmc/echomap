@@ -27,17 +27,8 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Data files (not needed in container)
-data_master/
-data_web/
-frontend/
-
 # Logs
 *.log
-
-# Node
-node_modules/
-package-lock.json
 
 # Environment (will be set via Railway)
 .env.local
@@ -48,5 +39,6 @@ package-lock.json
 README.md
 *.md
 tree_view.txt
+folder_inventory.txt
 folder_inventory.txt
 treeView.txt
