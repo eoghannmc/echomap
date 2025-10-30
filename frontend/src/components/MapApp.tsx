@@ -815,24 +815,14 @@ export default function MapApp() {
           pointer-events: none;
         }
 
-        /* Intro content positioned exactly like search modal title area */
+        /* Intro content centered on screen */
         .intro-shell {
           position: absolute;
           left: 50%;
-          transform: translateX(-50%);
-          top: 30%;
-          width: min(
-            1200px,
-            calc(
-              70vw -
-                (
-                  (var(--gap-50) + var(--collapsed-gap-right)) +
-                    (var(--gap-50) + 10px)
-                )
-            )
-          );
+          top: 50%;
+          transform: translate(-50%, -50%);
           display: flex;
-          justify-content: space-between;
+          justify-content: center;
           align-items: center;
         }
         .intro-title {
@@ -1330,15 +1320,32 @@ export default function MapApp() {
       {/* ===== Intro overlay ===== */}
       {introVisible && (
         <div className={`intro-overlay ${introFading ? "fade" : ""}`}>
-          <img 
-            src="/icons/GIF-TYPE-07.gif" 
-            alt="Loading..." 
-            style={{
-              width: '400px',
-              height: '400px',
-              objectFit: 'contain',
-            }}
-          />
+          <div className={`intro-shell ${introAnimate ? "intro-animate" : ""}`}>
+            <div className="intro-title" style={{ flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+              <img
+                src="/icons/GIF-TYPE-07.gif"
+                alt="Welcome"
+                style={{ width: '240px', height: '240px', objectFit: 'contain' }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '24px' }}>
+                <span className="intro-word" data-i="0">
+                  ECHO
+                </span>
+                <span className="intro-word" data-i="1">
+                  —
+                </span>
+                <span className="intro-word" data-i="2">
+                  your
+                </span>
+                <span className="intro-word" data-i="3">
+                  digital
+                </span>
+                <span className="intro-word" data-i="4">
+                  twin
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1376,29 +1383,6 @@ export default function MapApp() {
         <SimpleModal title="About" onClose={() => setShowAboutModal(false)}>
           Echo Map Victoria — 2025. About text / version info goes here.
         </SimpleModal>
-      )}
-
-      {/* ===== Loading Overlay ===== */}
-      {(layersLoading.planning || layersLoading.parcels || layersLoading.sa2 || searchLoading) && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(255, 255, 255, 0.9)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          <img 
-            src="/icons/GIF-TYPE-07.gif" 
-            alt="Loading..." 
-            style={{
-              width: '400px',
-              height: '400px',
-              objectFit: 'contain',
-            }}
-          />
-        </div>
       )}
     </div>
   );
