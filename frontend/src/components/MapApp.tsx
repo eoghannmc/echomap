@@ -697,30 +697,27 @@ export default function MapApp() {
       };
 
       if (newEnabled) {
-        // Check if layers already exist
         const layersExist = layerIds[layerKey]?.every((id) => map.getLayer(id));
 
         if (layersExist) {
-          // Just show existing layers
           layerIds[layerKey]?.forEach((id) => {
             map.setLayoutProperty(id, "visibility", "visible");
           });
-        } else {
-          // Load data and create layers
-          switch (layerKey) {
-            case "planning":
-              loadPlanningLayer();
-              break;
-            case "parcels":
-              loadParcelsLayer();
-              break;
-            case "meshBlocks":
-              loadMeshBlocksLayer();
-              break;
-            case "sa2":
-              loadSA2Layer();
-              break;
-          }
+        }
+
+        switch (layerKey) {
+          case "planning":
+            loadPlanningLayer();
+            break;
+          case "parcels":
+            loadParcelsLayer();
+            break;
+          case "meshBlocks":
+            loadMeshBlocksLayer();
+            break;
+          case "sa2":
+            loadSA2Layer();
+            break;
         }
       } else {
         // Hide layer
@@ -748,15 +745,83 @@ export default function MapApp() {
       setLastPick({ kind: "location", label: it.label });
 
       if (mapRef.current && it.lon != null && it.lat != null) {
-        mapRef.current.flyTo({
+        const map = mapRef.current;
+
+        // Remember which layers were enabled before clearing
+        const wasEnabled = {
+          planning: layersEnabled.planning,
+          parcels: layersEnabled.parcels,
+          meshBlocks: layersEnabled.meshBlocks,
+          sa2: layersEnabled.sa2,
+        };
+
+        // Temporarily disable all layers and hide them on the map
+        setLayersEnabled({
+          planning: false,
+          parcels: false,
+          meshBlocks: false,
+          sa2: false,
+        });
+
+        // Hide all layer visuals on the map
+        const allLayerIds = [
+          "planning-fill",
+          "planning-outline",
+          "parcels-outline",
+          "mesh-fill",
+          "mesh-outline",
+          "sa2-fill",
+          "sa2-outline",
+        ];
+        allLayerIds.forEach((id) => {
+          if (map.getLayer(id)) {
+            map.setLayoutProperty(id, "visibility", "none");
+          }
+        });
+
+        // Fly to new location
+        map.flyTo({
           center: [it.lon, it.lat],
           zoom: UX.addressFlyToZoom,
           speed: 1.2,
         });
+
+        // Once the map finishes moving, restore previously enabled layers
+        map.once("moveend", () => {
+          const ensureVisible = (ids: string[]) => {
+            ids.forEach((id) => {
+              if (map.getLayer(id)) {
+                map.setLayoutProperty(id, "visibility", "visible");
+              }
+            });
+          };
+
+          if (wasEnabled.planning) {
+            setLayersEnabled((prev) => ({ ...prev, planning: true }));
+            ensureVisible(["planning-fill", "planning-outline"]);
+            loadPlanningLayer();
+          }
+          if (wasEnabled.parcels) {
+            setLayersEnabled((prev) => ({ ...prev, parcels: true }));
+            ensureVisible(["parcels-outline"]);
+            loadParcelsLayer();
+          }
+          if (wasEnabled.meshBlocks) {
+            setLayersEnabled((prev) => ({ ...prev, meshBlocks: true }));
+            ensureVisible(["mesh-fill", "mesh-outline"]);
+            loadMeshBlocksLayer();
+          }
+          if (wasEnabled.sa2) {
+            setLayersEnabled((prev) => ({ ...prev, sa2: true }));
+            ensureVisible(["sa2-fill", "sa2-outline"]);
+            loadSA2Layer();
+          }
+        });
+
         if (addrMarkerRef.current) addrMarkerRef.current.remove();
         addrMarkerRef.current = new maplibregl.Marker({ color: "#e86017" })
           .setLngLat([it.lon, it.lat])
-          .addTo(mapRef.current);
+          .addTo(map);
       }
       setPanelOpen(false);
     } else {
@@ -778,7 +843,7 @@ export default function MapApp() {
       setPanelOpen(true);
       setOverlayTab("layers");
     }
-  }, []);
+  }, [layersEnabled, loadPlanningLayer, loadParcelsLayer, loadMeshBlocksLayer, loadSA2Layer]);
 
   /* ============== Render ============== */
   return (
