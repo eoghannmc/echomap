@@ -938,7 +938,7 @@ export default function MapApp() {
         }}
       >
         <button
-          className="px-2 py-1 border bg-white"
+          className="px-2 py-1 border border-gray-700 bg-white"
           onClick={() => window.location.assign("/")}
           aria-label="Home"
         >
@@ -1003,8 +1003,8 @@ export default function MapApp() {
 
       {/* Center search modal */}
       {showSearchUI && (
-        <div className="search-modal-wrap z-50">
-          <div className="border bg-white/95 shadow-lg px-4 py-3">
+        <div className="search-modal-wrap z-50 border border-gray-700">
+          <div className="border bg-white/95 shadow-lg px-3 py-1">
             <div className="flex items-center justify-between">
               <div className="echo-title text-lg font-semibold text-slate-600 w-full">
                 <img

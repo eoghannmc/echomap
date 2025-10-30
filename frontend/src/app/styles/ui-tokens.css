@@ -203,7 +203,7 @@ body {
    =============================== */
 .search-modal-wrap {
   position: fixed;
-  left: 40%;
+  left: 50%;
   transform: translateX(-50%);
   top: 30%;
   /* Reduced by 40%: 1200px -> 720px, 70vw -> 42vw */

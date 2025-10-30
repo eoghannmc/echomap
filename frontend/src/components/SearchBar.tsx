@@ -157,7 +157,7 @@ export default function SearchBar({
             }
           }}
           placeholder="Search: Address, Place, or Dataset"
-          className="w-full border px-4 py-3 shadow-sm" /* square corners via global override */
+          className="w-full border px-2 py-1 shadow-sm text-md" /* square corners via global override */
           onFocus={() => {
             if (!suppressRef.current && nomItems.length + echoItems.length)
               setOpen(true);
