@@ -565,14 +565,45 @@ export default function MapApp() {
           center_lon: lon,
           layer: "sa2",
           res: 8,
-          k: 4,
-          band_index: 2,
+          k: 8,
+          band_index: 4,
           clip_mode: "disk",
         }),
       });
 
       if (!response.ok) throw new Error(`SA2 API error: ${response.status}`);
       const data = await response.json();
+
+      // Define 5 green patterns to choose from randomly
+      const greenPatterns = [
+        "cross-24-green",
+        "diag-24-green",
+        "dot-24-green",
+        "diagGap-24-green",
+        "h-24-green"
+      ];
+
+      // Load all pattern images if not already loaded
+      for (const patternName of greenPatterns) {
+        if (!map.hasImage(patternName)) {
+          const patternUrl = `/patterns/${patternName}.png`;
+          const res = await fetch(patternUrl, { cache: "force-cache" });
+          const blob = await res.blob();
+          const bmp = await createImageBitmap(blob);
+          map.addImage(patternName, bmp);
+        }
+      }
+
+      // Assign a random pattern to each SA2 feature
+      if (data.features && data.features.features) {
+        data.features.features.forEach((feature: any) => {
+          const randomIndex = Math.floor(Math.random() * greenPatterns.length);
+          feature.properties = {
+            ...feature.properties,
+            patternKey: greenPatterns[randomIndex]
+          };
+        });
+      }
 
       if (!map.getSource("sa2")) {
         map.addSource("sa2", {
@@ -587,8 +618,8 @@ export default function MapApp() {
             visibility: "visible",
           },
           paint: {
-            "fill-color": "#e0e0e0",
-            "fill-opacity": 0.15,
+            "fill-pattern": ["get", "patternKey"],
+            "fill-opacity": 1,
           },
         });
         map.addLayer({
@@ -1299,32 +1330,15 @@ export default function MapApp() {
       {/* ===== Intro overlay ===== */}
       {introVisible && (
         <div className={`intro-overlay ${introFading ? "fade" : ""}`}>
-          <div className={`intro-shell ${introAnimate ? "intro-animate" : ""}`}>
-            <div className="intro-title">
-              <img
-                src="/icons/welcomeGif.gif"
-                alt="Welcome"
-                className="intro-gif"
-              />
-              <span className="intro-word" data-i="0">
-                ECHO
-              </span>
-              <span className="intro-word" data-i="1">
-                —
-              </span>
-              <span className="intro-word" data-i="2">
-                your
-              </span>
-              <span className="intro-word" data-i="3">
-                digital
-              </span>
-              <span className="intro-word" data-i="4">
-                twin
-              </span>
-            </div>
-            {/* Right side spacer (keeps same justify-between layout as search title row) */}
-            <div style={{ width: 80, height: 1 }} />
-          </div>
+          <img 
+            src="/icons/GIF-TYPE-07.gif" 
+            alt="Loading..." 
+            style={{
+              width: '400px',
+              height: '400px',
+              objectFit: 'contain',
+            }}
+          />
         </div>
       )}
 
@@ -1362,6 +1376,29 @@ export default function MapApp() {
         <SimpleModal title="About" onClose={() => setShowAboutModal(false)}>
           Echo Map Victoria — 2025. About text / version info goes here.
         </SimpleModal>
+      )}
+
+      {/* ===== Loading Overlay ===== */}
+      {(layersLoading.planning || layersLoading.parcels || layersLoading.sa2 || searchLoading) && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(255, 255, 255, 0.9)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <img 
+            src="/icons/GIF-TYPE-07.gif" 
+            alt="Loading..." 
+            style={{
+              width: '400px',
+              height: '400px',
+              objectFit: 'contain',
+            }}
+          />
+        </div>
       )}
     </div>
   );

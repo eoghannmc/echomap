@@ -34,28 +34,76 @@ export function exportPDF(payload: {
     // derive page transform from bbox (scale mode) or from geo bbox (snapshot: just fit)
     const bbox = turf.bbox(payload.fc);
     const [minx,miny,maxx,maxy] = bbox; // lon/lat bbox (approx)
-    // simple lon/lat -> page mm fit (not true scale; for true-scale, pass pre-clipped/projected fc instead)
+    
+    // Calculate aspect ratios to preserve geometry proportions
     const pad = 8; // mm
-    const pw = wmm - pad*2, ph = hmm - pad*2;
+    const pw = wmm - pad*2;
+    const ph = hmm - pad*2;
+    
+    const geoBboxWidth = maxx - minx;
+    const geoBboxHeight = maxy - miny;
+    const geoAspect = geoBboxWidth / geoBboxHeight;
+    const pageAspect = pw / ph;
+    
+    // Determine scaling to fit while preserving aspect ratio
+    let scaleX: number, scaleY: number, offsetX: number, offsetY: number;
+    
+    if (geoAspect > pageAspect) {
+      // Geometry is wider than page - fit to width
+      scaleX = pw / geoBboxWidth;
+      scaleY = scaleX; // Use same scale to preserve aspect ratio
+      const usedHeight = geoBboxHeight * scaleY;
+      offsetX = pad;
+      offsetY = pad + (ph - usedHeight) / 2; // Center vertically
+    } else {
+      // Geometry is taller than page - fit to height
+      scaleY = ph / geoBboxHeight;
+      scaleX = scaleY; // Use same scale to preserve aspect ratio
+      const usedWidth = geoBboxWidth * scaleX;
+      offsetX = pad + (pw - usedWidth) / 2; // Center horizontally
+      offsetY = pad;
+    }
 
     function pt(lon:number, lat:number){ 
-      const x = ((lon-minx)/(maxx-minx))*pw + pad;
-      const y = ((maxy-lat)/(maxy-miny))*ph + pad;
+      const x = (lon - minx) * scaleX + offsetX;
+      const y = (maxy - lat) * scaleY + offsetY;
       return [x,y] as [number,number];
     }
     for (const f of payload.fc.features) {
       if (!f.geometry) continue;
       if (f.geometry.type==="Point") {
         const [lon,lat] = f.geometry.coordinates as [number,number];
-        const [x,y] = pt(lon,lat); doc.circle(x,y, 0.7, "S");
+        const [x,y] = pt(lon,lat); 
+        doc.circle(x,y, 0.7, "S");
       } else if (f.geometry.type==="LineString") {
         const coords = f.geometry.coordinates as [number,number][];
-        coords.forEach((c,i)=> { const [x,y]=pt(c[0],c[1]); i?doc.line((doc as any)._lastX,(doc as any)._lastY,x,y):doc.line(x,y,x,y); (doc as any)._lastX=x;(doc as any)._lastY=y; });
+        if (coords.length < 2) continue;
+        for (let i = 1; i < coords.length; i++) {
+          const [x1, y1] = pt(coords[i-1][0], coords[i-1][1]);
+          const [x2, y2] = pt(coords[i][0], coords[i][1]);
+          doc.line(x1, y1, x2, y2);
+        }
       } else if (f.geometry.type==="Polygon") {
         const rings = f.geometry.coordinates as [number,number][][];
-        rings.forEach(r => {
-          const first = pt(r[0][0], r[0][1]); doc.line(first[0], first[1], first[0], first[1]);
-          r.slice(1).forEach(c => { const [x,y]=pt(c[0],c[1]); doc.line((doc as any)._lastX,(doc as any)._lastY,x,y); (doc as any)._lastX=x;(doc as any)._lastY=y; });
+        rings.forEach(ring => {
+          if (ring.length < 2) return;
+          for (let i = 1; i < ring.length; i++) {
+            const [x1, y1] = pt(ring[i-1][0], ring[i-1][1]);
+            const [x2, y2] = pt(ring[i][0], ring[i][1]);
+            doc.line(x1, y1, x2, y2);
+          }
+        });
+      } else if (f.geometry.type==="MultiPolygon") {
+        const polygons = f.geometry.coordinates as [number,number][][][];
+        polygons.forEach(polygon => {
+          polygon.forEach(ring => {
+            if (ring.length < 2) return;
+            for (let i = 1; i < ring.length; i++) {
+              const [x1, y1] = pt(ring[i-1][0], ring[i-1][1]);
+              const [x2, y2] = pt(ring[i][0], ring[i][1]);
+              doc.line(x1, y1, x2, y2);
+            }
+          });
         });
       }
     }

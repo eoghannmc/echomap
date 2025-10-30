@@ -3,14 +3,14 @@
    =============================== */
 :root {
   /* Brand + core palette */
-  --color-primary: #1a7f37;      /* Green (Primary) */
-  --color-line:    #000000;      /* Black (borders/lines) */
-  --color-bg:      #f7f4f2;      /* Off-white (app background) */
+  --color-primary: #1a7f37; /* Green (Primary) */
+  --color-line: #000000; /* Black (borders/lines) */
+  --color-bg: #f7f4f2; /* Off-white (app background) */
 
   /* Neutrals */
-  --color-white:   #ffffff;
-  --color-muted:   #e5e5e5;
-  --shadow-panel:  0 8px 24px rgba(0,0,0,.15);
+  --color-white: #ffffff;
+  --color-muted: #e5e5e5;
+  --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.15);
 
   /* Layout constants */
   --gap-5: 5px;
@@ -18,7 +18,7 @@
   --gap-20: 20px;
   --gap-30: 30px;
   --gap-50: 50px;
-  --panel-width: min(30vw, 600px);
+  --panel-width: min(26vw, 600px);
   --panel-grabber: 7px;
   --panel-offset-ctrl: 20px;
 
@@ -29,7 +29,10 @@
 }
 
 /* Base background */
-html, body { background: var(--color-bg); }
+html,
+body {
+  background: var(--color-bg);
+}
 
 /* ===============================
    MAP FRAME (5px gutter + border)
@@ -38,7 +41,7 @@ html, body { background: var(--color-bg); }
   position: fixed;
   inset: 0;
   padding: var(--gap-5);
-  
+
   pointer-events: none; /* allow inner to take events */
 }
 .map-inner {
@@ -67,11 +70,15 @@ html, body { background: var(--color-bg); }
   flex-direction: column;
   z-index: 900;
 }
-.side-panel.open { transform: translateX(0); }
+.side-panel.open {
+  transform: translateX(0);
+}
 
 .side-panel__header {
   height: 25px;
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0 10px;
   background: var(--color-white);
   border-bottom: 1px solid var(--color-line);
@@ -89,6 +96,7 @@ html, body { background: var(--color-bg); }
   position: relative;
   padding-top: 6px;
   overflow: hidden;
+  height: 100%;
 }
 .side-panel__item {
   display: grid;
@@ -106,24 +114,28 @@ html, body { background: var(--color-bg); }
 /* Overlay fills from top to footer top */
 .side-panel__overlay {
   position: absolute;
-  left: 0; right: 0;
+  left: 0;
+  right: 0;
   top: 0;
-  bottom: var(--panel-footer-h);
+  bottom: 0;
   background: var(--color-white);
   border-left: 1px solid var(--color-muted);
   border-top: 1px solid var(--color-muted);
   z-index: 2;
-  display: none;               /* base hidden */
+  display: none; /* base hidden */
 }
 .side-panel__overlay.is-open {
-  display: flex;               /* QA: set flex only when open */
+  display: flex; /* QA: set flex only when open */
   flex-direction: column;
 }
 
 /* Header stays on top and is clickable */
 .side-panel__overlay-header {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px; background: var(--color-white);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--color-white);
   border-bottom: 1px solid var(--color-muted);
   flex: 0 0 auto;
   cursor: pointer;
@@ -140,7 +152,9 @@ html, body { background: var(--color-bg); }
 /* Footer must match --panel-footer-h */
 .side-panel__footer {
   height: var(--panel-footer-h);
-  display: flex; align-items: center; justify-content: flex-end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   border-top: 1px solid var(--color-line);
   padding: 0 8px;
   font-size: 10px;
@@ -153,7 +167,9 @@ html, body { background: var(--color-bg); }
 .map-tools {
   position: fixed;
   bottom: var(--gap-5);
-  right: calc(var(--gap-5) + var(--dynamic-right-offset) + var(--panel-offset-ctrl));
+  right: calc(
+    var(--gap-5) + var(--dynamic-right-offset) + var(--panel-offset-ctrl)
+  );
   z-index: 910;
   display: grid;
   gap: 8px;
@@ -167,26 +183,36 @@ html, body { background: var(--color-bg); }
   top: var(--gap-5);
   right: var(--gap-10);
   z-index: 950;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
   border: 1px solid var(--color-line);
   border-radius: 50%;
   background: var(--color-white);
   cursor: pointer;
 }
-.header-star svg { width: 10px; height: 10px; }
+.header-star svg {
+  width: 10px;
+  height: 10px;
+}
 
 /* ===============================
    SEARCH MODAL SIZING
    =============================== */
 .search-modal-wrap {
   position: fixed;
-  left: 50%;
+  left: 40%;
   transform: translateX(-50%);
   top: 30%;
+  /* Reduced by 40%: 1200px -> 720px, 70vw -> 42vw */
   width: min(
-    1200px,
-    calc(70vw - ((var(--gap-50) + var(--collapsed-gap-right)) + (var(--gap-50) + 10px)))
+    880px,
+    calc(
+      50vw -
+        ((var(--gap-50) + var(--collapsed-gap-right)) + (var(--gap-50) + 10px))
+    )
   );
 }
 
@@ -194,7 +220,7 @@ html, body { background: var(--color-bg); }
 .searchbar-dropdown .locality-pill {
   margin-left: auto;
   font-size: 11px;
-  border: 1px solid rgba(10,37,64,0.12);
+  border: 1px solid rgba(10, 37, 64, 0.12);
   border-radius: 999px;
   padding: 2px 8px;
   background: var(--color-muted); /* QA: fixed var name */
@@ -222,7 +248,7 @@ html, body { background: var(--color-bg); }
   font-size: 12px;
   color: #444;
   text-transform: uppercase;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 .echo-toast .value {
   font-weight: 600;
