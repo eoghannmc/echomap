@@ -348,15 +348,84 @@ export default function MapApp() {
             "fill-color": [
               "match",
               ["get", "ZONE_CODE"],
-              "RES1",
-              "#FFA500",
-              "COM1",
-              "#FF6B6B",
-              "IND1",
-              "#4ECDC4",
-              "#888888",
+              // Residential - General
+              "GRZ", "#66bb66", "GRZ1", "#66bb66", "GRZ2", "#66bb66", "GRZ3", "#66bb66",
+              "GRZ4", "#66bb66", "GRZ5", "#66bb66", "GRZ6", "#66bb66", "GRZ7", "#66bb66",
+              "GRZ8", "#66bb66", "GRZ9", "#66bb66", "GRZ10", "#66bb66", "GRZ11", "#66bb66",
+              "GRZ12", "#66bb66", "GRZ13", "#66bb66", "GRZ14", "#66bb66", "GRZ15", "#66bb66",
+              "GRZ16", "#66bb66", "GRZ17", "#66bb66", "GRZ18", "#66bb66",
+              // Residential - Neighbourhood
+              "NRZ1", "#99cc99", "NRZ2", "#99cc99", "NRZ3", "#99cc99", "NRZ4", "#99cc99",
+              "NRZ5", "#99cc99", "NRZ6", "#99cc99", "NRZ7", "#99cc99", "NRZ8", "#99cc99",
+              "NRZ9", "#99cc99", "NRZ10", "#99cc99", "NRZ11", "#99cc99", "NRZ12", "#99cc99",
+              "NRZ14", "#99cc99",
+              // Residential - Growth
+              "RGZ", "#339966", "RGZ1", "#339966", "RGZ2", "#339966", "RGZ3", "#339966",
+              "RGZ4", "#339966", "RGZ5", "#339966", "RGZ6", "#339966", "RGZ7", "#339966",
+              "RGZ8", "#339966", "RGZ9", "#339966",
+              // Residential - Low Density
+              "LDRZ", "#cce5cc", "LDRZ1", "#cce5cc", "LDRZ2", "#cce5cc", "LDRZ3", "#cce5cc",
+              "LDRZ4", "#cce5cc", "LDRZ5", "#cce5cc",
+              // Industrial
+              "IN1Z", "#999966", "IN2Z", "#999966", "IN3Z", "#999966",
+              // Commercial
+              "B1Z", "#996633", "B2Z", "#996633", "B3Z", "#996633", "B4Z", "#996633",
+              "B5Z", "#996633", "C1Z", "#996633", "C2Z", "#996633",
+              // Development / Priority
+              "CDZ1", "#4da6ff", "CDZ2", "#4da6ff", "CDZ3", "#4da6ff", "CDZ4", "#4da6ff",
+              "CDZ5", "#4da6ff", "CDZ6", "#4da6ff", "PDZ", "#4da6ff", "PDZ1", "#4da6ff",
+              "PDZ2", "#4da6ff",
+              // Urban Growth
+              "UGZ", "#64b5f6", "UGZ1", "#64b5f6", "UGZ2", "#64b5f6", "UGZ3", "#64b5f6",
+              "UGZ4", "#64b5f6", "UGZ5", "#64b5f6", "UGZ6", "#64b5f6", "UGZ7", "#64b5f6",
+              "UGZ8", "#64b5f6", "UGZ9", "#64b5f6", "UGZ10", "#64b5f6", "UGZ11", "#64b5f6",
+              "UGZ12", "#64b5f6", "UGZ13", "#64b5f6", "UGZ14", "#64b5f6", "UGZ15", "#64b5f6",
+              "UGZ16", "#64b5f6",
+              // Transport
+              "TRZ1", "#b3b3b3", "TRZ2", "#b3b3b3", "TRZ3", "#b3b3b3", "TRZ4", "#b3b3b3",
+              // Farming
+              "FZ", "#d4e157", "FZ1", "#d4e157", "FZ2", "#d4e157", "FZ3", "#d4e157",
+              "FZ4", "#d4e157",
+              // Rural Living
+              "RLZ", "#a1887f", "RLZ1", "#a1887f", "RLZ2", "#a1887f", "RLZ3", "#a1887f",
+              "RLZ4", "#a1887f", "RLZ5", "#a1887f",
+              // Rural Activity
+              "RAZ", "#bcaaa4", "RAZ1", "#bcaaa4", "RAZ2", "#bcaaa4", "RAZ3", "#bcaaa4",
+              // Rural Conservation
+              "RCZ", "#8d6e63", "RCZ1", "#8d6e63", "RCZ2", "#8d6e63", "RCZ3", "#8d6e63",
+              "RCZ4", "#8d6e63", "RCZ5", "#8d6e63", "RCZ6", "#8d6e63", "RCZ7", "#8d6e63",
+              "RCZ8", "#8d6e63", "RCZ9", "#8d6e63", "RCZ10", "#8d6e63", "RCZ11", "#8d6e63",
+              "RCZ12", "#8d6e63", "RCZ13", "#8d6e63", "RCZ14", "#8d6e63", "RCZ15", "#8d6e63",
+              // Township
+              "TZ", "#aed581", "TZ1", "#aed581", "TZ2", "#aed581",
+              // Green Wedge
+              "GWZ", "#a5d6a7", "GWZ1", "#a5d6a7", "GWZ2", "#a5d6a7", "GWZ3", "#a5d6a7",
+              "GWZ4", "#a5d6a7", "GWZ5", "#a5d6a7", "GWZ6", "#a5d6a7",
+              "GWAZ", "#a5d6a7", "GWAZ1", "#a5d6a7", "GWAZ2", "#a5d6a7", "GWAZ4", "#a5d6a7",
+              "GWAZ5", "#a5d6a7", "GWAZ6", "#a5d6a7",
+              // Public / Open
+              "PPRZ", "#81c784", "PCRZ", "#81c784", "PUZ1", "#81c784", "PUZ2", "#81c784",
+              "PUZ3", "#81c784", "PUZ5", "#81c784", "PUZ6", "#81c784", "PUZ7", "#81c784",
+              // Special Use
+              "SUZ1", "#ffcc80", "SUZ2", "#ffcc80", "SUZ3", "#ffcc80", "SUZ4", "#ffcc80",
+              "SUZ5", "#ffcc80", "SUZ6", "#ffcc80", "SUZ7", "#ffcc80", "SUZ8", "#ffcc80",
+              "SUZ9", "#ffcc80", "SUZ10", "#ffcc80", "SUZ11", "#ffcc80", "SUZ12", "#ffcc80",
+              "SUZ13", "#ffcc80", "SUZ14", "#ffcc80", "SUZ15", "#ffcc80", "SUZ16", "#ffcc80",
+              "SUZ17", "#ffcc80",
+              // Central City / Docklands
+              "CCZ1", "#2e5984", "CCZ2", "#2e5984", "CCZ3", "#2e5984", "CCZ4", "#2e5984",
+              "CCZ5", "#2e5984", "CCZ6", "#2e5984", "CCZ7", "#2e5984",
+              "DZ1", "#2e5984", "DZ2", "#2e5984", "DZ3", "#2e5984", "DZ4", "#2e5984",
+              "DZ5", "#2e5984", "DZ6", "#2e5984", "DZ7", "#2e5984",
+              // Activity / Mixed Use
+              "ACZ1", "#6c91bf", "ACZ2", "#6c91bf", "ACZ3", "#6c91bf",
+              "MUZ", "#6c91bf", "MUZ1", "#6c91bf", "MUZ2", "#6c91bf", "MUZ3", "#6c91bf",
+              "MUZ4", "#6c91bf",
+              // Other
+              "UFZ", "#4fc3f7", "CA", "#b0bec5", "PZ", "#8eacbb",
+              "#cccccc" // default
             ],
-            "fill-opacity": 0.3,
+            "fill-opacity": 0.6,
           },
         });
         map.addLayer({
@@ -368,7 +437,7 @@ export default function MapApp() {
           },
           paint: {
             "line-color": "#333",
-            "line-width": 1.5,
+            "line-width": 1,
           },
         });
       } else {
@@ -400,11 +469,9 @@ export default function MapApp() {
         body: JSON.stringify({
           center_lat: lat,
           center_lon: lon,
-          which: "parcels",
-          res: 8,
+          res: 9,
+          k: 1,
           disk_k: 1,
-          band_index: 1,
-          clip_mode: "disk",
         }),
       });
 
@@ -412,10 +479,14 @@ export default function MapApp() {
         throw new Error(`Parcels API error: ${response.status}`);
       const data = await response.json();
 
+      // Use the parcels data if available, otherwise fall back to combined features
+      const parcelData = data.parcels || data.features;
+      const meshData = data.mesh_blocks;
+
       if (!map.getSource("parcels")) {
         map.addSource("parcels", {
           type: "geojson",
-          data: data.properties || data.features,
+          data: parcelData,
         });
         map.addLayer({
           id: "parcels-outline",
@@ -425,14 +496,48 @@ export default function MapApp() {
             visibility: "visible",
           },
           paint: {
-            "line-color": "#8B4513",
-            "line-width": 1,
+            "line-color": "#555",
+            "line-width": 1.0,
           },
         });
       } else {
-        (map.getSource("parcels") as any).setData(
-          data.properties || data.features
-        );
+        (map.getSource("parcels") as any).setData(parcelData);
+      }
+
+      // Also add mesh blocks if available
+      if (meshData && meshData.features && meshData.features.length > 0) {
+        if (!map.getSource("mesh-blocks")) {
+          map.addSource("mesh-blocks", {
+            type: "geojson",
+            data: meshData,
+          });
+          map.addLayer({
+            id: "mesh-fill",
+            type: "fill",
+            source: "mesh-blocks",
+            layout: {
+              visibility: "visible",
+            },
+            paint: {
+              "fill-color": "#7dbb9d",
+              "fill-opacity": 0.5,
+            },
+          });
+          map.addLayer({
+            id: "mesh-outline",
+            type: "line",
+            source: "mesh-blocks",
+            layout: {
+              visibility: "visible",
+            },
+            paint: {
+              "line-color": "#1a7f37",
+              "line-width": 0.5,
+            },
+          });
+        } else {
+          (map.getSource("mesh-blocks") as any).setData(meshData);
+        }
       }
 
       console.log("[Parcels] Loaded:", data.summary);
@@ -482,8 +587,8 @@ export default function MapApp() {
             visibility: "visible",
           },
           paint: {
-            "fill-color": "#3498db",
-            "fill-opacity": 0.2,
+            "fill-color": "#e0e0e0",
+            "fill-opacity": 0.15,
           },
         });
         map.addLayer({
@@ -494,8 +599,8 @@ export default function MapApp() {
             visibility: "visible",
           },
           paint: {
-            "line-color": "#2c3e50",
-            "line-width": 2,
+            "line-color": "#333",
+            "line-width": 1,
           },
         });
       } else {
@@ -522,7 +627,7 @@ export default function MapApp() {
 
       const layerIds: Record<string, string[]> = {
         planning: ["planning-fill", "planning-outline"],
-        parcels: ["parcels-outline"],
+        parcels: ["parcels-outline", "mesh-fill", "mesh-outline"],
         sa2: ["sa2-fill", "sa2-outline"],
       };
 

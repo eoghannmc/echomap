@@ -226,11 +226,11 @@ class PostGISAnalyzer:
         k: int = 4,
         which: Optional[str] = None,  # "mesh" | "parcels" | None (both)
         disk_k: Optional[int] = None,
-        max_features: int = 5000,
+        max_features: int = 500000,
     ) -> dict:
         """
-        Query mesh blocks from PostGIS.
-        Returns population and dwelling data.
+        Query mesh blocks and/or property parcels from PostGIS.
+        Returns population/dwelling data from mesh_blocks and property boundaries from vic_boundaries.
         """
         # Get H3 clip geometry
         disk_poly, _ = _disk_ring_polys(center_lon, center_lat, res, k)
@@ -243,64 +243,128 @@ class PostGISAnalyzer:
             _, ring_polys = _disk_ring_polys(center_lon, center_lat, res, dk)
             clip_geom = unary_union(ring_polys[: dk + 1])
         
-        # Query mesh_blocks table
         clip_wkt = clip_geom.wkt
-        sql_query = f"""
-            SELECT *
-            FROM mesh_blocks
-            WHERE ST_Intersects(
-                geometry,
-                ST_GeomFromText('{clip_wkt}', 4326)
-            )
-            LIMIT {max_features}
-        """
-        
-        try:
-            gdf = gpd.read_postgis(sql=sql_query, con=self.engine, geom_col="geometry")
-        except Exception as e:
-            raise RuntimeError(f"PostGIS query failed: {e}")
-        
-        if gdf.empty:
-            return {
-                "features": {"type": "FeatureCollection", "features": []},
-                "mask": self._geom_to_wgs84_fc(clip_geom),
-                "summary": {"count": 0, "h3": {"res": res, "k": k}},
-            }
-        
-        # Clip to geometry
-        clipped = gpd.clip(gdf, gpd.GeoDataFrame(geometry=[clip_geom], crs="EPSG:4326"))
-        clipped = clipped.loc[~clipped.geometry.is_empty]
-        
-        # Build features
-        features = []
-        for _, row in clipped.iterrows():
-            if row.geometry.is_empty:
-                continue
-            
-            props = {}
-            # Add mesh block properties
-            if "MB_CODE21" in row:
-                props["MB_CODE21"] = row["MB_CODE21"]
-            if "Person" in row:
-                props["Person"] = int(row["Person"]) if row["Person"] is not None else 0
-            if "Dwelling" in row:
-                props["Dwelling"] = int(row["Dwelling"]) if row["Dwelling"] is not None else 0
-            
-            features.append({
-                "type": "Feature",
-                "geometry": row.geometry.__geo_interface__,
-                "properties": props,
-            })
-        
-        return {
-            "features": {"type": "FeatureCollection", "features": features},
+        result = {
             "mask": self._geom_to_wgs84_fc(clip_geom),
             "summary": {
-                "count": len(features),
                 "h3": {"res": res, "k": k},
                 "disk_k": dk,
             },
         }
+        
+        # Query mesh_blocks if requested
+        if which is None or which == "mesh":
+            sql_mesh = f"""
+                SELECT *
+                FROM mesh_blocks
+                WHERE ST_Intersects(
+                    geometry,
+                    ST_GeomFromText('{clip_wkt}', 4326)
+                )
+                LIMIT {max_features}
+            """
+            
+            try:
+                gdf_mesh = gpd.read_postgis(sql=sql_mesh, con=self.engine, geom_col="geometry")
+                if not gdf_mesh.empty:
+                    clipped_mesh = gpd.clip(gdf_mesh, gpd.GeoDataFrame(geometry=[clip_geom], crs="EPSG:4326"))
+                    clipped_mesh = clipped_mesh.loc[~clipped_mesh.geometry.is_empty]
+                    
+                    mesh_features = []
+                    for _, row in clipped_mesh.iterrows():
+                        if row.geometry.is_empty:
+                            continue
+                        
+                        props = {"layer": "mesh_blocks"}
+                        if "MB_CODE21" in row:
+                            props["MB_CODE21"] = row["MB_CODE21"]
+                        if "Person" in row:
+                            props["Person"] = int(row["Person"]) if row["Person"] is not None else 0
+                        if "Dwelling" in row:
+                            props["Dwelling"] = int(row["Dwelling"]) if row["Dwelling"] is not None else 0
+                        
+                        mesh_features.append({
+                            "type": "Feature",
+                            "geometry": row.geometry.__geo_interface__,
+                            "properties": props,
+                        })
+                    
+                    result["mesh_blocks"] = {
+                        "type": "FeatureCollection",
+                        "features": mesh_features
+                    }
+                    result["summary"]["mesh_count"] = len(mesh_features)
+                else:
+                    result["mesh_blocks"] = {"type": "FeatureCollection", "features": []}
+                    result["summary"]["mesh_count"] = 0
+            except Exception as e:
+                result["mesh_blocks"] = {"type": "FeatureCollection", "features": []}
+                result["summary"]["mesh_count"] = 0
+                result["summary"]["mesh_error"] = str(e)
+        
+        # Query vic_properties (property parcels) if requested
+        if which is None or which == "parcels":
+            parcels_table = POSTGIS_TABLES.get("parcels", "vic_properties")
+            sql_parcels = f"""
+                SELECT *
+                FROM {parcels_table}
+                WHERE ST_Intersects(
+                    geometry,
+                    ST_GeomFromText('{clip_wkt}', 4326)
+                )
+                LIMIT {max_features}
+            """
+            
+            try:
+                gdf_parcels = gpd.read_postgis(sql=sql_parcels, con=self.engine, geom_col="geometry")
+                if not gdf_parcels.empty:
+                    clipped_parcels = gpd.clip(gdf_parcels, gpd.GeoDataFrame(geometry=[clip_geom], crs="EPSG:4326"))
+                    clipped_parcels = clipped_parcels.loc[~clipped_parcels.geometry.is_empty]
+                    
+                    parcel_features = []
+                    for _, row in clipped_parcels.iterrows():
+                        if row.geometry.is_empty:
+                            continue
+                        
+                        props = {"layer": "parcels"}
+                        # Add any relevant property parcel attributes
+                        for col in row.index:
+                            if col != "geometry" and row[col] is not None:
+                                props[col] = row[col]
+                        
+                        parcel_features.append({
+                            "type": "Feature",
+                            "geometry": row.geometry.__geo_interface__,
+                            "properties": props,
+                        })
+                    
+                    result["parcels"] = {
+                        "type": "FeatureCollection",
+                        "features": parcel_features
+                    }
+                    result["summary"]["parcels_count"] = len(parcel_features)
+                else:
+                    result["parcels"] = {"type": "FeatureCollection", "features": []}
+                    result["summary"]["parcels_count"] = 0
+            except Exception as e:
+                result["parcels"] = {"type": "FeatureCollection", "features": []}
+                result["summary"]["parcels_count"] = 0
+                result["summary"]["parcels_error"] = str(e)
+        
+        # For backwards compatibility, also include combined features
+        all_features = []
+        if "mesh_blocks" in result:
+            all_features.extend(result["mesh_blocks"]["features"])
+        if "parcels" in result:
+            all_features.extend(result["parcels"]["features"])
+        
+        result["features"] = {
+            "type": "FeatureCollection",
+            "features": all_features
+        }
+        result["summary"]["total_count"] = len(all_features)
+        
+        return result
     
     def __del__(self):
         """Cleanup database connection"""
