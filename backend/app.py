@@ -167,6 +167,40 @@ def analyze_meshprops_h3(req: MeshPropsReq):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
+@app.post("/analyze/parcels")
+def analyze_parcels(req: MeshPropsReq):
+    """Query property parcels only from PostGIS"""
+    try:
+        k = req.k if (req.disk_k is None) else req.disk_k
+        out = get_postgis().query_meshprops(
+            center_lon=req.center_lon,
+            center_lat=req.center_lat,
+            res=req.res,
+            k=req.k,
+            which="parcels",
+            disk_k=k,
+        )
+        return out
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/analyze/mesh_blocks")
+def analyze_mesh_blocks(req: MeshPropsReq):
+    """Query mesh blocks only from PostGIS"""
+    try:
+        k = req.k if (req.disk_k is None) else req.disk_k
+        out = get_postgis().query_meshprops(
+            center_lon=req.center_lon,
+            center_lat=req.center_lat,
+            res=req.res,
+            k=req.k,
+            which="mesh",
+            disk_k=k,
+        )
+        return out
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
 # Mount the census API
 app.include_router(census_router, prefix="")
 

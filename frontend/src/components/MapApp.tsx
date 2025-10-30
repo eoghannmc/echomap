@@ -192,11 +192,13 @@ export default function MapApp() {
   const [layersEnabled, setLayersEnabled] = useState({
     planning: false,
     parcels: false,
+    meshBlocks: false,
     sa2: false,
   });
   const [layersLoading, setLayersLoading] = useState({
     planning: false,
     parcels: false,
+    meshBlocks: false,
     sa2: false,
   });
 
@@ -223,7 +225,7 @@ export default function MapApp() {
       style:
         "https://api.maptiler.com/maps/backdrop/style.json?key=" +
         (process.env.NEXT_PUBLIC_MAPTILER_KEY || ""),
-      center: [144.9631, -37.8136],
+      center: [144.96675745, -37.741669550],
       zoom: 10,
       attributionControl: false,
     });
@@ -463,7 +465,7 @@ export default function MapApp() {
     setLayersLoading((prev) => ({ ...prev, parcels: true }));
     try {
       const { lat, lon } = getMapCenter();
-      const response = await fetch(`${BACKEND_URL}/analyze/meshprops_h3`, {
+      const response = await fetch(`${BACKEND_URL}/analyze/parcels`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -479,9 +481,8 @@ export default function MapApp() {
         throw new Error(`Parcels API error: ${response.status}`);
       const data = await response.json();
 
-      // Use the parcels data if available, otherwise fall back to combined features
-      const parcelData = data.parcels || data.features;
-      const meshData = data.mesh_blocks;
+      // Use the parcels data from the backend
+      const parcelData = data.parcels || { type: "FeatureCollection", features: [] };
 
       if (!map.getSource("parcels")) {
         map.addSource("parcels", {
@@ -496,48 +497,12 @@ export default function MapApp() {
             visibility: "visible",
           },
           paint: {
-            "line-color": "#555",
+            "line-color": "#FF0000",
             "line-width": 1.0,
           },
         });
       } else {
         (map.getSource("parcels") as any).setData(parcelData);
-      }
-
-      // Also add mesh blocks if available
-      if (meshData && meshData.features && meshData.features.length > 0) {
-        if (!map.getSource("mesh-blocks")) {
-          map.addSource("mesh-blocks", {
-            type: "geojson",
-            data: meshData,
-          });
-          map.addLayer({
-            id: "mesh-fill",
-            type: "fill",
-            source: "mesh-blocks",
-            layout: {
-              visibility: "visible",
-            },
-            paint: {
-              "fill-color": "#7dbb9d",
-              "fill-opacity": 0.5,
-            },
-          });
-          map.addLayer({
-            id: "mesh-outline",
-            type: "line",
-            source: "mesh-blocks",
-            layout: {
-              visibility: "visible",
-            },
-            paint: {
-              "line-color": "#1a7f37",
-              "line-width": 0.5,
-            },
-          });
-        } else {
-          (map.getSource("mesh-blocks") as any).setData(meshData);
-        }
       }
 
       console.log("[Parcels] Loaded:", data.summary);
@@ -546,6 +511,74 @@ export default function MapApp() {
       alert("Failed to load property parcels. Make sure backend is running.");
     } finally {
       setLayersLoading((prev) => ({ ...prev, parcels: false }));
+    }
+  }, []);
+
+  const loadMeshBlocksLayer = useCallback(async () => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    setLayersLoading((prev) => ({ ...prev, meshBlocks: true }));
+    try {
+      const { lat, lon } = getMapCenter();
+      const response = await fetch(`${BACKEND_URL}/analyze/mesh_blocks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          center_lat: lat,
+          center_lon: lon,
+          res: 9,
+          k: 1,
+          disk_k: 1,
+        }),
+      });
+
+      if (!response.ok)
+        throw new Error(`Mesh blocks API error: ${response.status}`);
+      const data = await response.json();
+
+      // Use the mesh blocks data from the backend
+      const meshData = data.mesh_blocks || { type: "FeatureCollection", features: [] };
+
+      if (!map.getSource("mesh-blocks")) {
+        map.addSource("mesh-blocks", {
+          type: "geojson",
+          data: meshData,
+        });
+        map.addLayer({
+          id: "mesh-fill",
+          type: "fill",
+          source: "mesh-blocks",
+          layout: {
+            visibility: "visible",
+          },
+          paint: {
+            "fill-color": "#000000",
+            "fill-opacity": 0,
+          },
+        });
+        map.addLayer({
+          id: "mesh-outline",
+          type: "line",
+          source: "mesh-blocks",
+          layout: {
+            visibility: "visible",
+          },
+          paint: {
+            "line-color": "#FFA500",
+            "line-width": 1.0,
+          },
+        });
+      } else {
+        (map.getSource("mesh-blocks") as any).setData(meshData);
+      }
+
+      console.log("[Mesh Blocks] Loaded:", data.summary);
+    } catch (error) {
+      console.error("[Mesh Blocks] Error:", error);
+      alert("Failed to load mesh blocks. Make sure backend is running.");
+    } finally {
+      setLayersLoading((prev) => ({ ...prev, meshBlocks: false }));
     }
   }, []);
 
@@ -658,7 +691,8 @@ export default function MapApp() {
 
       const layerIds: Record<string, string[]> = {
         planning: ["planning-fill", "planning-outline"],
-        parcels: ["parcels-outline", "mesh-fill", "mesh-outline"],
+        parcels: ["parcels-outline"],
+        meshBlocks: ["mesh-fill", "mesh-outline"],
         sa2: ["sa2-fill", "sa2-outline"],
       };
 
@@ -680,6 +714,9 @@ export default function MapApp() {
             case "parcels":
               loadParcelsLayer();
               break;
+            case "meshBlocks":
+              loadMeshBlocksLayer();
+              break;
             case "sa2":
               loadSA2Layer();
               break;
@@ -694,7 +731,7 @@ export default function MapApp() {
         });
       }
     },
-    [layersEnabled, loadPlanningLayer, loadParcelsLayer, loadSA2Layer]
+    [layersEnabled, loadPlanningLayer, loadParcelsLayer, loadMeshBlocksLayer, loadSA2Layer]
   );
 
   /* ============== Original Handlers ============== */
@@ -1217,6 +1254,20 @@ export default function MapApp() {
                     className={layersLoading.parcels ? "text-gray-400" : ""}
                   >
                     Property Parcels {layersLoading.parcels && "(loading...)"}
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 mb-3">
+                  <input
+                    type="checkbox"
+                    checked={layersEnabled.meshBlocks}
+                    disabled={layersLoading.meshBlocks}
+                    onChange={() => toggleLayer("meshBlocks")}
+                  />
+                  <span
+                    className={layersLoading.meshBlocks ? "text-gray-400" : ""}
+                  >
+                    Mesh Blocks {layersLoading.meshBlocks && "(loading...)"}
                   </span>
                 </label>
 
