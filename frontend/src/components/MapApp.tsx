@@ -401,8 +401,10 @@ export default function MapApp() {
           center_lat: lat,
           center_lon: lon,
           which: "parcels",
-          res: 9,
-          disk_k: 0,
+          res: 8,
+          disk_k: 1,
+          band_index: 1,
+          clip_mode: "disk",
         }),
       });
 
