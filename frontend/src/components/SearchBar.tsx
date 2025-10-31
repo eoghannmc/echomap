@@ -114,7 +114,13 @@ export default function SearchBar({
       if (!alive) return;
       setNomItems(nom.slice(0, 5));
       setEchoItems(out.slice(0, 1));
-      if (!suppressRef.current) setOpen(nom.length + out.length > 0);
+      // Open dropdown if we have results and not suppressed
+      const hasResults = nom.length + out.length > 0;
+      if (hasResults && !suppressRef.current) {
+        setOpen(true);
+      } else if (!hasResults) {
+        setOpen(false);
+      }
     })().finally(() => {
       if (alive) {
         setLoading(false);
@@ -159,8 +165,10 @@ export default function SearchBar({
           placeholder="Search: Address, Place, or Dataset"
           className="w-full border px-2 py-1 sm:px-3 sm:py-2 shadow-sm text-sm sm:text-md" /* square corners via global override */
           onFocus={() => {
-            if (!suppressRef.current && nomItems.length + echoItems.length)
+            suppressRef.current = false;
+            if (nomItems.length + echoItems.length > 0) {
               setOpen(true);
+            }
           }}
           onBlur={() => setTimeout(() => setOpen(false), 120)}
           autoComplete="off"
