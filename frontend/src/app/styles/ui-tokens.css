@@ -203,17 +203,31 @@ body {
    =============================== */
 .search-modal-wrap {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  top: 30%;
-  /* Reduced by 40%: 1200px -> 720px, 70vw -> 42vw */
-  width: min(
-    880px,
-    calc(
-      50vw -
-        ((var(--gap-50) + var(--collapsed-gap-right)) + (var(--gap-50) + 10px))
-    )
-  );
+  z-index: 960;
+  
+  /* Mobile and minimobile: full width from left */
+  left: 0;
+  right: 0;
+  top: 10%;
+  width: auto;
+  /* padding: 0 var(--gap-10); */
+  margin: 0px 16px 0px 8px;
+  
+  /* Tablet and up: centered with max width */
+  @media (min-width: 768px) {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    top: 30%;
+    padding: 0;
+    width: min(
+      880px,
+      calc(
+        50vw -
+          ((var(--gap-50) + var(--collapsed-gap-right)) + (var(--gap-50) + 10px))
+      )
+    );
+  }
 }
 
 /* Suggestion list right-side locality pill */
@@ -230,9 +244,6 @@ body {
 /* Toast (below header, anchored to left) */
 .echo-toast {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  top: 10%;
   z-index: 960;
   background: #ffffff;
   border: 1px solid var(--color-line);
@@ -241,8 +252,22 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: min(60vw, 520px);
   overflow: hidden;
+  
+  /* Mobile and minimobile: full width from left */
+  left: var(--gap-10);
+  right: var(--gap-10);
+  top: 8%;
+  max-width: none;
+  
+  /* Tablet and up: centered with max width */
+  @media (min-width: 768px) {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    top: 10%;
+    max-width: min(60vw, 520px);
+  }
 }
 .echo-toast .label {
   font-size: 12px;

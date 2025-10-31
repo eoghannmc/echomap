@@ -144,8 +144,8 @@ export default function SearchBar({
   }
 
   return (
-    <div className="searchbar-wrapper relative">
-      <div className="flex items-stretch gap-2">
+    <div className="searchbar-wrapper relative w-full">
+      <div className="flex items-stretch gap-1 sm:gap-2">
         <input
           value={q}
           onChange={(e) => {
@@ -157,7 +157,7 @@ export default function SearchBar({
             }
           }}
           placeholder="Search: Address, Place, or Dataset"
-          className="w-full border px-2 py-1 shadow-sm text-md" /* square corners via global override */
+          className="w-full border px-2 py-1 sm:px-3 sm:py-2 shadow-sm text-sm sm:text-md" /* square corners via global override */
           onFocus={() => {
             if (!suppressRef.current && nomItems.length + echoItems.length)
               setOpen(true);
@@ -169,7 +169,7 @@ export default function SearchBar({
         {hasPicked && (
           <button
             type="button"
-            className="px-3 py-2 border bg-white hover:bg-gray-50"
+            className="px-2 py-1 sm:px-3 sm:py-2 border bg-white hover:bg-gray-50 text-sm sm:text-base whitespace-nowrap"
             onClick={handleDone}
             title="Close search"
           >
@@ -179,7 +179,7 @@ export default function SearchBar({
       </div>
 
       {open && (
-        <div className="searchbar-dropdown absolute z-50 left-0 right-0 mt-2 max-h-96 overflow-auto bg-white p-1">
+        <div className="searchbar-dropdown absolute z-50 left-0 right-0 mt-2 max-h-[60vh] sm:max-h-96 overflow-auto bg-white p-1 shadow-lg border">
           {loading && (
             <div className="px-3 py-2 text-sm text-gray-500">Searching…</div>
           )}
@@ -190,29 +190,29 @@ export default function SearchBar({
           {/* Nominatim */}
           {nomItems.length > 0 && (
             <>
-              <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-gray-500">
+              <div className="px-2 sm:px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-gray-500">
                 Places
               </div>
               <ul className="mb-2">
                 {nomItems.map((it) => (
                   <li key={it.key}>
                     <button
-                      className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
+                      className="w-full px-2 sm:px-3 py-2 text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-1 sm:gap-2 text-sm sm:text-base"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => pick(it)}
                     >
-                      <span className="inline-flex items-center border px-2 text-[11px]">
+                      <span className="inline-flex items-center border px-1 sm:px-2 text-[10px] sm:text-[11px] whitespace-nowrap">
                         Address
                       </span>
-                      <span className="truncate flex-1">{it.label}</span>
-                      <span className="locality-pill">
+                      <span className="truncate flex-1 text-xs sm:text-sm">{it.label}</span>
+                      <span className="locality-pill text-[10px] sm:text-xs hidden sm:inline">
                         {(it as any).localityRaw || "—"}
                       </span>
                     </button>
                   </li>
                 ))}
               </ul>
-              <div className="px-3 pb-2 text-[10px] text-gray-500">
+              <div className="px-2 sm:px-3 pb-2 text-[9px] sm:text-[10px] text-gray-500">
                 Search powered by OpenStreetMap Nominatim
               </div>
             </>
@@ -221,24 +221,24 @@ export default function SearchBar({
           {/* Echo (max 1) */}
           {echoItems.length > 0 && (
             <>
-              <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-gray-500">
+              <div className="px-2 sm:px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-gray-500">
                 Echo datasets & streets
               </div>
               <ul>
                 {echoItems.map((it, i) => (
                   <li key={it.key ?? `${it.tag}-${i}-${it.label}`}>
                     <button
-                      className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
+                      className="w-full px-2 sm:px-3 py-2 text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-1 sm:gap-2 text-sm sm:text-base"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => pick(it)}
                     >
-                      <span className="inline-flex items-center border px-2 text-[11px]">
+                      <span className="inline-flex items-center border px-1 sm:px-2 text-[10px] sm:text-[11px] whitespace-nowrap">
                         {it.tag === "Areas" && (it as any).street_key
                           ? "Street"
                           : it.tag}
                       </span>
-                      <span className="truncate flex-1">{it.label}</span>
-                      <span className="locality-pill">
+                      <span className="truncate flex-1 text-xs sm:text-sm">{it.label}</span>
+                      <span className="locality-pill text-[10px] sm:text-xs hidden sm:inline">
                         {(it as any).localityRaw || (it as any).locality || "—"}
                       </span>
                     </button>
