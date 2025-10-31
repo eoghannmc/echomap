@@ -10,6 +10,7 @@ rtree
 numpy
 pandas
 h3
+httpx
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
 geoalchemy2>=0.14.0

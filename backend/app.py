@@ -204,6 +204,78 @@ def analyze_mesh_blocks(req: MeshPropsReq):
 # Mount the census API
 app.include_router(census_router, prefix="")
 
+@app.get("/geocode/search")
+async def geocode_search(q: str, limit: int = 5):
+    """Proxy for Nominatim search to avoid CORS and 403 issues"""
+    import httpx
+    
+    params = {
+        "q": q,
+        "format": "jsonv2",
+        "addressdetails": "1",
+        "limit": str(limit),
+        "countrycodes": "au",
+        "viewbox": "140.96,-39.20,150.05,-33.98",
+        "bounded": "1"
+    }
+    
+    headers = {
+        "User-Agent": "EchoMapVictoria/1.0 (contact@echomap.app)",
+        "Accept-Language": "en",
+        "Referer": "https://echomap.app"
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params=params,
+                headers=headers,
+                timeout=10.0
+            )
+            response.raise_for_status()
+            data = response.json()
+            # Filter for Victoria
+            filtered = [p for p in data if p.get("address", {}).get("state", "").lower().find("victoria") >= 0]
+            return filtered
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/geocode/reverse")
+async def geocode_reverse(lon: float, lat: float):
+    """Proxy for Nominatim reverse geocoding"""
+    import httpx
+    
+    params = {
+        "lon": str(lon),
+        "lat": str(lat),
+        "format": "jsonv2",
+        "addressdetails": "1"
+    }
+    
+    headers = {
+        "User-Agent": "EchoMapVictoria/1.0 (contact@echomap.app)",
+        "Accept-Language": "en",
+        "Referer": "https://echomap.app"
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params=params,
+                headers=headers,
+                timeout=10.0
+            )
+            response.raise_for_status()
+            data = response.json()
+            # Check if in Victoria
+            if data.get("address", {}).get("state", "").lower().find("victoria") < 0:
+                return None
+            return data
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
 @app.get("/healthz")
 def healthz():
     # Check if PostGIS connection works
