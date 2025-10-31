@@ -203,7 +203,7 @@ body {
    =============================== */
 .search-modal-wrap {
   position: fixed;
-  z-index: 960;
+  z-index: 1;
   
   /* Mobile and minimobile: full width from left */
   left: 0;
