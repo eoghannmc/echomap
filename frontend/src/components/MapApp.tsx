@@ -1615,7 +1615,7 @@ export default function MapApp() {
       )}
       {showAboutModal && (
         <SimpleModal title="About" onClose={() => setShowAboutModal(false)}>
-          Echo Map 2025. Established in Melbourne with the guidance of CIVVIC labs- Empowering the grid of the future program.  Founding parters are Eddie Buckle and Eoghan McCarthy, with help form Loughlin O'Kane.
+          Echo Map 2025. Established in Melbourne with the guidance of CIVVIC labs- Empowering the grid of the future program.  Founding parters are Eddie Buckle and Eoghan McCarthy, with help from Loughlin O'Kane.
         </SimpleModal>
       )}
     </div>
