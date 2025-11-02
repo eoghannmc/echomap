@@ -181,21 +181,21 @@ body {
 .header-star {
   position: fixed;
   top: var(--gap-5);
-  right: var(--gap-10);
+  right: var(--gap-5);
   z-index: 950;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 35px;
+  height: 35px;
   border: 1px solid var(--color-line);
   border-radius: 50%;
   background: var(--color-white);
   cursor: pointer;
 }
 .header-star svg {
-  width: 10px;
-  height: 10px;
+  width: 15px;
+  height: 15px;
 }
 
 /* ===============================
