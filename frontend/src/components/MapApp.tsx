@@ -209,6 +209,13 @@ export default function MapApp() {
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
 
+  // Account / signup form state
+  const [acctName, setAcctName] = useState("");
+  const [acctEmail, setAcctEmail] = useState("");
+  const [acctComment, setAcctComment] = useState("");
+  const [acctSubmitting, setAcctSubmitting] = useState(false);
+  const [acctMessage, setAcctMessage] = useState<string | null>(null);
+
   // SearchBar loading flag → spin logo (already wired)
   const [searchLoading, setSearchLoading] = useState(false);
 
@@ -306,6 +313,60 @@ export default function MapApp() {
     const center = map.getCenter();
     return { lat: center.lat, lon: center.lng };
   };
+
+  // Submit account/signup to backend
+  async function handleAccountSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setAcctMessage(null);
+    const emailRe = /^\S+@\S+\.\S+$/;
+    if (!emailRe.test(acctEmail)) {
+      setAcctMessage("Please enter a valid email address.");
+      return;
+    }
+    if (!acctName.trim()) {
+      setAcctMessage("Please enter your name.");
+      return;
+    }
+
+    setAcctSubmitting(true);
+    try {
+      const payload = {
+        name: acctName.trim(),
+        email: acctEmail.trim(),
+        comment: acctComment.trim(),
+        map_center: getMapCenter(),
+      };
+      // POST to the Next.js API route at /api/signup (server-side will use Supabase)
+      const resp = await fetch(`/api/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        setAcctMessage(j?.error || `Signup failed (${resp.status})`);
+        return;
+      }
+      // success-ish: server returns { ok: true, message }
+      if (j?.ok) {
+        setAcctMessage(j.message || "Thanks — you've been added to the wait list.");
+        // clear form
+        setAcctName("");
+        setAcctEmail("");
+        setAcctComment("");
+        // close modal shortly after success
+        setTimeout(() => setShowAccountModal(false), 1200);
+      } else if (j?.message) {
+        setAcctMessage(j.message);
+      } else {
+        setAcctMessage("Signup completed (no message)");
+      }
+    } catch (err: any) {
+      setAcctMessage(`Signup failed: ${err?.message ?? String(err)}`);
+    } finally {
+      setAcctSubmitting(false);
+    }
+  }
 
   // Fetch and add planning zones
   // Fetch and add planning zones layer
@@ -472,7 +533,7 @@ export default function MapApp() {
           center_lat: lat,
           center_lon: lon,
           res: 9,
-          k: 1,
+          k: 2,
           disk_k: 1,
         }),
       });
@@ -613,7 +674,7 @@ export default function MapApp() {
         "diag-24-green",
         "dot-24-green",
         "diagGap-24-green",
-        "h-24-green"
+        "h-24-green",
       ];
 
       // Load all pattern images if not already loaded
@@ -633,7 +694,7 @@ export default function MapApp() {
           const randomIndex = Math.floor(Math.random() * greenPatterns.length);
           feature.properties = {
             ...feature.properties,
-            patternKey: greenPatterns[randomIndex]
+            patternKey: greenPatterns[randomIndex],
           };
         });
       }
@@ -1205,7 +1266,7 @@ export default function MapApp() {
               onClick={() => setShowAccountModal(true)}
             >
               <span className="chev-ico closed" />
-              <span>Account</span>
+              <span>Join Waitlist</span>
             </div>
             <div
               className="side-panel__item"
@@ -1349,8 +1410,7 @@ export default function MapApp() {
                 </label>
 
                 <div className="mt-4 p-2 text-xs text-slate-500 bg-slate-50 rounded">
-                  <strong>Note:</strong> Layers are loaded based on current map
-                  center. Move the map and re-toggle to update data.
+                  <strong>Note:</strong> Layers are clipped to current map view
                 </div>
               </div>
             </div>
@@ -1491,13 +1551,71 @@ export default function MapApp() {
         />
       )}
       {showAccountModal && (
-        <SimpleModal title="Account" onClose={() => setShowAccountModal(false)}>
-          Your account settings will appear here.
+        <SimpleModal title="Join Waitlist" onClose={() => setShowAccountModal(false)}>
+          <div>
+            <form onSubmit={handleAccountSubmit} className="space-y-3 text-sm">
+              <div>
+                <label className="block text-xs font-medium">Email</label>
+                <input
+                  type="email"
+                  value={acctEmail}
+                  onChange={(e) => setAcctEmail(e.target.value)}
+                  required
+                  className="w-full border px-2 py-1"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium">Name</label>
+                <input
+                  type="text"
+                  value={acctName}
+                  onChange={(e) => setAcctName(e.target.value)}
+                  required
+                  className="w-full border px-2 py-1"
+                  placeholder="Your name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium">Comment (optional)</label>
+                <textarea
+                  value={acctComment}
+                  onChange={(e) => setAcctComment(e.target.value)}
+                  className="w-full border px-2 py-1"
+                  rows={3}
+                  placeholder="Tell us what you'd like to see in your digital twin.."
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  className="px-3 py-2 border bg-sky-600 text-white rounded"
+                  disabled={acctSubmitting}
+                >
+                  {acctSubmitting ? "Signing up..." : "Sign up"}
+                </button>
+                <button
+                  type="button"
+                  className="px-3 py-2 border bg-white rounded"
+                  onClick={() => setShowAccountModal(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+
+              {acctMessage && (
+                <div className="text-sm text-slate-700">{acctMessage}</div>
+              )}
+            </form>
+          </div>
         </SimpleModal>
       )}
       {showAboutModal && (
         <SimpleModal title="About" onClose={() => setShowAboutModal(false)}>
-          Echo Map Victoria — 2025. About text / version info goes here.
+          Echo Map 2025. Established in Melbourne with the guidance of CIVVIC labs- Empowering the grid of the future program.  Founding parters are Eddie Buckle and Eoghan McCarthy, with help form Loughlin O'Kane.
         </SimpleModal>
       )}
     </div>

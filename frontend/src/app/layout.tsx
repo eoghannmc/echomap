@@ -2,6 +2,7 @@ import "./globals.css";
 import { Kanit } from "next/font/google";
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/ui-tokens.css';
+import { Analytics } from '@vercel/analytics/react';
 
 const kanit = Kanit({ subsets: ["latin"], weight: ["300","400","500","600","700"] });
 
@@ -13,7 +14,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={kanit.className} style={{ margin: 0 }}>{children}</body>
+      <body className={kanit.className} style={{ margin: 0 }}>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
