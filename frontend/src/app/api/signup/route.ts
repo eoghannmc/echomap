@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,                // <-- server-only
-  process.env.SUPABASE_SERVICE_ROLE_KEY!    // <-- server-only (DO NOT expose)
-);
-
 export async function POST(req: NextRequest) {
   try {
     const { name, email, comment, map_center } = await req.json();
+
+    // create supabase client at request time so build doesn't fail if envs
+    // aren't present during static build. These are required on the server.
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: 'Server misconfiguration: SUPABASE_SERVICE_ROLE_KEY is required' }, { status: 500 });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // minimal validation
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
