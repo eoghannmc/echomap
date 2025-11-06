@@ -12,4 +12,5 @@ const nextConfig: NextConfig = {
   },
 };
 
+// Backend API: https://echoapp-backend-production.up.railway.app
 export default nextConfig;
