@@ -91,16 +91,6 @@ def get_hex_enrichment_data():
 
 
 
-# Optional: pull data from Supabase on boot
-if os.environ.get("BOOTSTRAP_FROM_SUPABASE", "false").lower() == "true":
-    try:
-        from .storage_sync import sync as storage_sync
-        storage_sync()
-        print("[app] storage sync complete")
-    except Exception as e:
-        print(f"[app] storage sync failed: {e}")
-
-
 MASTER_GPKG = Path("data_master/master.gpkg")
 
 app = FastAPI(title="EchoApp Backend", version="1.0.0")
@@ -390,15 +380,25 @@ def get_places_metadata():
 
 @lru_cache(maxsize=1)
 def get_places_data():
-    """Load and cache POI parquet data"""
+    """Load and cache POI parquet data (from local or Storage)"""
     global _places_cache
     if _places_cache is None:
-        if not PLACES_PARQUET_PATH.exists():
-            raise RuntimeError(f"Places parquet not found: {PLACES_PARQUET_PATH}")
-        
         import geopandas as gpd
-        _places_cache = gpd.read_parquet(PLACES_PARQUET_PATH)
-        print(f"[Places] Loaded {len(_places_cache)} POIs from parquet")
+        
+        # Try local file first (for dev)
+        if PLACES_PARQUET_PATH.exists():
+            _places_cache = gpd.read_parquet(PLACES_PARQUET_PATH)
+            print(f"[Places] Loaded {len(_places_cache)} POIs from local file")
+        else:
+            # Load from Storage (for Railway)
+            print("[Places] Local file not found, loading from Storage...")
+            try:
+                from storage_loader import load_parquet_from_storage
+                _places_cache = load_parquet_from_storage("places/pois_h3.parquet")
+                print(f"[Places] Loaded {len(_places_cache)} POIs from Storage")
+            except Exception as e:
+                print(f"  [ERROR] Loading places/pois_h3.parquet: {e}")
+                raise RuntimeError(f"Failed to load POI data from local or Storage")
     
     return _places_cache
 

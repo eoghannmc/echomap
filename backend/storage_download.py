@@ -56,13 +56,19 @@ def download_file(storage_path: str, local_path: Path):
         return False
 
 def list_files_in_storage(prefix: str):
-    """List all files in a storage prefix."""
+    """List all files in a storage prefix (filters out folders)."""
     if not SUPABASE_ENABLED:
         return []
     
     try:
         result = supabase.storage.from_(BUCKET_NAME).list(prefix)
-        return [item['name'] for item in result]
+        # Filter out folders (they have no metadata/size)
+        files = []
+        for item in result:
+            # Files have metadata with size, folders don't
+            if item.get('metadata') is not None:
+                files.append(item['name'])
+        return files
     except Exception as e:
         print(f"  ❌ Error listing files in {prefix}: {e}")
         return []
