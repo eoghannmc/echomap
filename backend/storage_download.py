@@ -24,7 +24,13 @@ else:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 BUCKET_NAME = "geo-data"
-BASE_PATH = Path(__file__).parent.parent / "data_web"
+# Path works for both local (backend/../data_web) and Railway (/app/data_web created on demand)
+if os.path.exists(Path(__file__).parent / "data_web"):
+    # Railway: data_web is in /app/data_web
+    BASE_PATH = Path(__file__).parent / "data_web"
+else:
+    # Local dev: data_web is at repo root
+    BASE_PATH = Path(__file__).parent.parent / "data_web"
 
 def download_file(storage_path: str, local_path: Path):
     """Download a single file from Supabase Storage."""
