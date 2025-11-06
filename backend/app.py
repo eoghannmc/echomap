@@ -1,3 +1,7 @@
+
+
+
+# ...existing code...
 # backend/app.py
 import os
 from pathlib import Path
@@ -99,13 +103,15 @@ app = FastAPI(title="EchoApp Backend", version="1.0.0")
 # Main parquet files loaded on-demand from Storage
 @app.on_event("startup")
 async def startup_event():
-    """Download links files on startup for shard filtering."""
-    try:
-        from storage_download import ensure_data_files
-        ensure_data_files()
-    except Exception as e:
-        print(f"⚠️  Warning: Could not download links files: {e}")
-        print("   Layers will attempt on-demand loading from Storage.")
+    """
+    Startup event - No longer downloading links files.
+    Using split parquet files loaded on-demand from Supabase Storage.
+    """
+    print("="*60)
+    print("✅ Backend startup complete")
+    print("📦 Using split parquet files from Supabase Storage")
+    print("   Files downloaded on-demand based on query location")
+    print("="*60)
 
 # CORS (adjust for your domains)
 app.add_middleware(
@@ -154,9 +160,20 @@ class TrainsReq(HexClip):
 
 # ---------- routes ----------
 
+# --- Fauna endpoint ---
+@app.get("/api/fauna")
+def get_fauna(lat: float, lon: float, k: int = 3, res: int = 8):
+    # TODO: Replace with real fauna loader logic
+    return {"features": [], "summary": "Fauna endpoint placeholder. Implement actual loader."}
+
+
 @app.post("/analyze/zones_h3")
 def analyze_zones_h3(req: ZonesReq):
     """Query planning zones or SA2 boundaries from PostGIS"""
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("zones_h3")
+    logger.info(f"analyze_zones_h3 called with: center_lon={req.center_lon}, center_lat={req.center_lat}, res={req.res}, k={req.k}, band_index={req.band_index}, clip_mode={req.clip_mode}, layer={req.layer}, zone_codes={req.codes}, simplify_tolerance_m={req.simplify_tolerance_m}")
     try:
         out = get_postgis().query_zones(
             center_lon=req.center_lon,
@@ -169,8 +186,10 @@ def analyze_zones_h3(req: ZonesReq):
             zone_codes=req.codes,
             simplify_tolerance_m=req.simplify_tolerance_m,  
         )
+        logger.info(f"analyze_zones_h3 result: {out['summary'] if 'summary' in out else out}")
         return out
     except Exception as e:
+        logger.error(f"analyze_zones_h3 exception: {e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.post("/analyze/meshprops_h3")
@@ -1024,92 +1043,48 @@ async def geocode_reverse(lon: float, lat: float):
 @app.get("/api/properties")
 def get_properties(lat: float, lon: float, k: int = 4, res: int = 8, r_work: int = 8):
     """
-    Get property parcels using local sharded parquet with H3 links for fast filtering.
-    Returns red outlined polygons with no fill.
-    
-    Args:
-        lat: Latitude (WGS84)
-        lon: Longitude (WGS84)
-        k: K-ring radius around center hex (default: 4)
-        res: H3 resolution (default: 8, ignored - always uses r_work)
-        r_work: Working resolution for hex grid (default: 8)
-    
-    Returns:
-        GeoJSON FeatureCollection with property parcels
+    """
+    """
+    Property parcels layer - SHARD-BASED SPLIT FILE LOADING ENABLED
+    Loads only the required split files from Supabase Storage.
     """
     try:
         import h3
         from shapely.geometry import Polygon, box
         from utils_h3 import hex_polygon_wgs84
-        
+        from storage_split_loader import load_property_for_shards
+
         # Step 1: Get ROI hex cells
         center_hex = _geo_to_cell(lat, lon, r_work)
         roi_cells = set(h3.grid_disk(center_hex, k))
         print(f"[Property] Center: {lat},{lon} | r_work={r_work} | k={k}")
         print(f"[Property] ROI cells: {len(roi_cells)} at res{r_work}")
-        
+
         # Step 2: Get parent r7 shards
         shard_keys = set()
         for cell in roi_cells:
             parent = h3.cell_to_parent(cell, 7)
             shard_keys.add(parent)
-        
+
         print(f"[Property] Shard keys (r7): {len(shard_keys)}")
-        
-        # Step 3: Load links FIRST (critical for Railway - don't load 707MB file without links!)
-        prefixes = {str(sk)[:2] for sk in shard_keys}
-        links_df = get_property_links_for_prefixes(prefixes)
-        
-        if links_df.empty:
-            raise RuntimeError(
-                f"Property links not found. Links files must be downloaded at startup. "
-                f"Cannot load 707MB property file without shard filtering."
-            )
-        
-        # Step 4: Load property data (only after confirming links exist)
-        property_gdf = get_property_data()
-        
-        print(f"[Property] Total properties: {len(property_gdf)}, Total links: {len(links_df)}")
-        print(f"[Property] Using shard-based filtering")
-        
-        # Step 4: Filter links by shard keys
-        shard_keys_str = {str(sk) for sk in shard_keys}
-        links_filtered = links_df[links_df['h3_r7'].isin(shard_keys_str)]
-        feature_ids = set(links_filtered['feature_id'].unique())
-        
-        print(f"[Property] Features in shards: {len(feature_ids)} feature_ids from {len(shard_keys)} shards")
-        
-        # Step 5: Filter properties by feature IDs
-        property_filtered = property_gdf[property_gdf['feature_id'].isin(feature_ids)]
-        
-        print(f"[Property] Unique features to load: {len(feature_ids)}")
-        print(f"[Property] Properties after shard filter: {len(property_filtered)}")
-        
-        # Step 6: Create ROI polygon for final clipping
-        from shapely.ops import unary_union
-        roi_polygons = [hex_polygon_wgs84(cell) for cell in roi_cells]
-        roi_polygon = unary_union(roi_polygons)
-        property_clipped = property_filtered[property_filtered.geometry.intersects(roi_polygon)].copy()
-        
-        print(f"[Property] Properties after ROI clipping: {len(property_clipped)}")
-        
-        # Step 7: Convert to GeoJSON
-        result = property_clipped.__geo_interface__
-        
-        summary = {
-            "center": [lat, lon],
-            "k": k,
-            "r_work": r_work,
-            "roi_cells": len(roi_cells),
-            "shards": len(shard_keys),
-            "features_in_shards": len(feature_ids),
-            "features_returned": len(property_clipped),
-            "method": "shard_based_filtering"
-        }
-        
-        result['summary'] = summary
-        return result
-        
+
+        # Step 3: Load property features from split files
+        gdf = load_property_for_shards(shard_keys)
+        print(f"[Property] Loaded {len(gdf)} features from split files")
+
+        # Step 4: Clip to ROI
+        roi_poly = box(
+            min([hex_polygon_wgs84(cell).bounds[0] for cell in roi_cells]),
+            min([hex_polygon_wgs84(cell).bounds[1] for cell in roi_cells]),
+            max([hex_polygon_wgs84(cell).bounds[2] for cell in roi_cells]),
+            max([hex_polygon_wgs84(cell).bounds[3] for cell in roi_cells])
+        )
+        clipped = gdf[gdf.intersects(roi_poly)]
+        print(f"[Property] Returned {len(clipped)} features after clipping")
+
+        # Convert to GeoJSON dict
+        geojson = clipped.__geo_interface__
+        return JSONResponse(content=geojson, status_code=200)
     except Exception as e:
         print(f"[Property] Error: {e}")
         import traceback
@@ -1119,8 +1094,8 @@ def get_properties(lat: float, lon: float, k: int = 4, res: int = 8, r_work: int
 @app.get("/api/flora")
 def get_flora(lat: float, lon: float, k: int = 4, r_work: int = 8):
     """
-    Get flora/fauna features using local sharded parquet with H3 links for fast filtering.
-    Returns polygons colored by EVC (Ecological Vegetation Class).
+    Get flora/fauna features using split parquet files from Supabase Storage.
+    Downloads only the specific prefix files needed for the query area.
     
     Args:
         lat: Latitude (WGS84)
@@ -1129,8 +1104,67 @@ def get_flora(lat: float, lon: float, k: int = 4, r_work: int = 8):
         r_work: Working resolution for hex grid (default: 8)
     
     Returns:
-        GeoJSON FeatureCollection with flora/fauna features
+        GeoJSON FeatureCollection with flora features
     """
+    try:
+        import h3
+        from shapely.ops import unary_union
+        from utils_h3 import hex_polygon_wgs84
+        from storage_split_loader import load_flora_for_shards
+        
+        # Step 1: Get ROI hex cells
+        center_hex = _geo_to_cell(lat, lon, r_work)
+        roi_cells = set(h3.grid_disk(center_hex, k))
+        print(f"[Flora] Center: {lat},{lon} | r_work={r_work} | k={k}")
+        print(f"[Flora] ROI cells: {len(roi_cells)} at res{r_work}")
+        
+        # Step 2: Get parent R7 shards
+        shard_keys = set()
+        for cell in roi_cells:
+            parent = h3.cell_to_parent(cell, 7)
+            shard_keys.add(parent)
+        
+        print(f"[Flora] Shard keys (R7): {len(shard_keys)}")
+        
+        # Step 3: Load ONLY the split files for these shards (6-char or 8-char prefixes)
+        # This downloads only ~2-3 small files instead of 1.1GB!
+        flora_gdf = load_flora_for_shards(shard_keys)
+        
+        if flora_gdf.empty:
+            print(f"[Flora] No data found for shards")
+            return {"type": "FeatureCollection", "features": [], "summary": {"error": "No data"}}
+        
+        print(f"[Flora] Loaded {len(flora_gdf)} flora features from split files")
+        
+        # Step 4: Create ROI polygon for final clipping
+        roi_polygons = [hex_polygon_wgs84(cell) for cell in roi_cells]
+        roi_polygon = unary_union(roi_polygons)
+        flora_clipped = flora_gdf[flora_gdf.geometry.intersects(roi_polygon)].copy()
+        
+        print(f"[Flora] Flora features after ROI clipping: {len(flora_clipped)}")
+        
+        # Step 5: Convert to GeoJSON
+        result = flora_clipped.__geo_interface__
+        
+        summary = {
+            "center": [lat, lon],
+            "k": k,
+            "r_work": r_work,
+            "roi_cells": len(roi_cells),
+            "shards": len(shard_keys),
+            "features_loaded": len(flora_gdf),
+            "features_returned": len(flora_clipped),
+            "method": "split_file_loading"
+        }
+        
+        result['summary'] = summary
+        return result
+        
+    except Exception as e:
+        print(f"[Flora] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
     try:
         import h3
         from shapely.geometry import Polygon
@@ -1213,8 +1247,8 @@ def get_flora(lat: float, lon: float, k: int = 4, r_work: int = 8):
 @app.get("/api/roads")
 def get_roads(lat: float, lon: float, k: int = 4, r_work: int = 8):
     """
-    Get road features using local sharded parquet with H3 links for fast filtering.
-    Returns line geometries for roads clipped to the analysis area.
+    Get road features using split parquet files from Supabase Storage.
+    Downloads only the specific prefix files needed for the query area.
     
     Args:
         lat: Latitude (WGS84)
@@ -1227,8 +1261,9 @@ def get_roads(lat: float, lon: float, k: int = 4, r_work: int = 8):
     """
     try:
         import h3
-        from shapely.geometry import Polygon
+        from shapely.ops import unary_union
         from utils_h3 import hex_polygon_wgs84
+        from storage_split_loader import load_roads_for_shards
         
         # Step 1: Get ROI hex cells
         center_hex = _geo_to_cell(lat, lon, r_work)
@@ -1236,52 +1271,32 @@ def get_roads(lat: float, lon: float, k: int = 4, r_work: int = 8):
         print(f"[Roads] Center: {lat},{lon} | r_work={r_work} | k={k}")
         print(f"[Roads] ROI cells: {len(roi_cells)} at res{r_work}")
         
-        # Step 2: Get parent r7 shards
+        # Step 2: Get parent R7 shards
         shard_keys = set()
         for cell in roi_cells:
             parent = h3.cell_to_parent(cell, 7)
             shard_keys.add(parent)
         
-        print(f"[Roads] Shard keys (r7): {len(shard_keys)}")
+        print(f"[Roads] Shard keys (R7): {len(shard_keys)}")
         
-        # Step 3: Load links FIRST (critical for Railway - don't load 204MB file without links!)
-        prefixes = {str(sk)[:2] for sk in shard_keys}
-        links_df = get_roads_links_for_prefixes(prefixes)
+        # Step 3: Load ONLY the split files for these shards (6-char prefixes)
+        # This downloads only ~2-3 small files instead of 204MB!
+        roads_gdf = load_roads_for_shards(shard_keys)
         
-        if links_df.empty:
-            raise RuntimeError(
-                f"Roads links not found. Links files must be downloaded at startup. "
-                f"Cannot load 204MB roads file without shard filtering."
-            )
+        if roads_gdf.empty:
+            print(f"[Roads] No data found for shards")
+            return {"type": "FeatureCollection", "features": [], "summary": {"error": "No data"}}
         
-        # Step 4: Load roads data (only after confirming links exist)
-        roads_gdf = get_roads_data()
+        print(f"[Roads] Loaded {len(roads_gdf)} road features from split files")
         
-        print(f"[Roads] Total road features: {len(roads_gdf)}, Total links: {len(links_df)}")
-        print(f"[Roads] Using shard-based filtering")
-        
-        # Step 4: Filter links by shard keys
-        shard_keys_str = {str(sk) for sk in shard_keys}
-        links_filtered = links_df[links_df['h3_r7'].isin(shard_keys_str)]
-        feature_ids = set(links_filtered['feature_id'].unique())
-        
-        print(f"[Roads] Features in shards: {len(feature_ids)} feature_ids from {len(shard_keys)} shards")
-        
-        # Step 5: Filter roads by feature IDs
-        roads_filtered = roads_gdf[roads_gdf['feature_id'].isin(feature_ids)]
-        
-        print(f"[Roads] Unique features to load: {len(feature_ids)}")
-        print(f"[Roads] Road features after shard filter: {len(roads_filtered)}")
-        
-        # Step 6: Create ROI polygon for final clipping
-        from shapely.ops import unary_union
+        # Step 4: Create ROI polygon for final clipping
         roi_polygons = [hex_polygon_wgs84(cell) for cell in roi_cells]
         roi_polygon = unary_union(roi_polygons)
-        roads_clipped = roads_filtered[roads_filtered.geometry.intersects(roi_polygon)].copy()
+        roads_clipped = roads_gdf[roads_gdf.geometry.intersects(roi_polygon)].copy()
         
         print(f"[Roads] Road features after ROI clipping: {len(roads_clipped)}")
         
-        # Step 7: Convert to GeoJSON
+        # Step 5: Convert to GeoJSON
         result = roads_clipped.__geo_interface__
         
         summary = {
@@ -1290,9 +1305,9 @@ def get_roads(lat: float, lon: float, k: int = 4, r_work: int = 8):
             "r_work": r_work,
             "roi_cells": len(roi_cells),
             "shards": len(shard_keys),
-            "features_in_shards": len(feature_ids),
+            "features_loaded": len(roads_gdf),
             "features_returned": len(roads_clipped),
-            "method": "shard_based_filtering"
+            "method": "split_file_loading"
         }
         
         result['summary'] = summary
@@ -1307,8 +1322,8 @@ def get_roads(lat: float, lon: float, k: int = 4, r_work: int = 8):
 @app.get("/api/contours")
 def get_contours(lat: float, lon: float, k: int = 4, r_work: int = 8):
     """
-    Get contour features using local sharded parquet with H3 links for fast filtering.
-    Returns line geometries for elevation contours clipped to the analysis area.
+    Get contour features using split parquet files from Supabase Storage.
+    Downloads only the specific prefix files needed for the query area.
     
     Args:
         lat: Latitude (WGS84)
@@ -1321,8 +1336,9 @@ def get_contours(lat: float, lon: float, k: int = 4, r_work: int = 8):
     """
     try:
         import h3
-        from shapely.geometry import Polygon
+        from shapely.ops import unary_union
         from utils_h3 import hex_polygon_wgs84
+        from storage_split_loader import load_contours_for_shards
         
         # Step 1: Get ROI hex cells
         center_hex = _geo_to_cell(lat, lon, r_work)
@@ -1330,52 +1346,32 @@ def get_contours(lat: float, lon: float, k: int = 4, r_work: int = 8):
         print(f"[Contours] Center: {lat},{lon} | r_work={r_work} | k={k}")
         print(f"[Contours] ROI cells: {len(roi_cells)} at res{r_work}")
         
-        # Step 2: Get parent r7 shards
+        # Step 2: Get parent R7 shards
         shard_keys = set()
         for cell in roi_cells:
             parent = h3.cell_to_parent(cell, 7)
             shard_keys.add(parent)
         
-        print(f"[Contours] Shard keys (r7): {len(shard_keys)}")
+        print(f"[Contours] Shard keys (R7): {len(shard_keys)}")
         
-        # Step 3: Load links FIRST (critical for Railway - don't load 1.5GB file without links!)
-        prefixes = {str(sk)[:2] for sk in shard_keys}
-        links_df = get_contours_links_for_prefixes(prefixes)
+        # Step 3: Load ONLY the split files for these shards (6-char or 8-char prefixes)
+        # This downloads only ~2-5 small files instead of 1.5GB!
+        contours_gdf = load_contours_for_shards(shard_keys)
         
-        if links_df.empty:
-            raise RuntimeError(
-                f"Contours links not found. Links files must be downloaded at startup. "
-                f"Cannot load 1.5GB contours file without shard filtering."
-            )
+        if contours_gdf.empty:
+            print(f"[Contours] No data found for shards")
+            return {"type": "FeatureCollection", "features": [], "summary": {"error": "No data"}}
         
-        # Step 4: Load contours data (only after confirming links exist)
-        contours_gdf = get_contours_data()
+        print(f"[Contours] Loaded {len(contours_gdf)} contour features from split files")
         
-        print(f"[Contours] Total contour features: {len(contours_gdf)}, Total links: {len(links_df)}")
-        print(f"[Contours] Using shard-based filtering")
-        
-        # Step 4: Filter links by shard keys
-        shard_keys_str = {str(sk) for sk in shard_keys}
-        links_filtered = links_df[links_df['h3_r7'].isin(shard_keys_str)]
-        feature_ids = set(links_filtered['feature_id'].unique())
-        
-        print(f"[Contours] Features in shards: {len(feature_ids)} feature_ids from {len(shard_keys)} shards")
-        
-        # Step 5: Filter contours by feature IDs
-        contours_filtered = contours_gdf[contours_gdf['feature_id'].isin(feature_ids)]
-        
-        print(f"[Contours] Unique features to load: {len(feature_ids)}")
-        print(f"[Contours] Contour features after shard filter: {len(contours_filtered)}")
-        
-        # Step 6: Create ROI polygon for final clipping
-        from shapely.ops import unary_union
+        # Step 4: Create ROI polygon for final clipping
         roi_polygons = [hex_polygon_wgs84(cell) for cell in roi_cells]
         roi_polygon = unary_union(roi_polygons)
-        contours_clipped = contours_filtered[contours_filtered.geometry.intersects(roi_polygon)].copy()
+        contours_clipped = contours_gdf[contours_gdf.geometry.intersects(roi_polygon)].copy()
         
         print(f"[Contours] Contour features after ROI clipping: {len(contours_clipped)}")
         
-        # Step 7: Convert to GeoJSON
+        # Step 5: Convert to GeoJSON
         result = contours_clipped.__geo_interface__
         
         summary = {
@@ -1384,9 +1380,9 @@ def get_contours(lat: float, lon: float, k: int = 4, r_work: int = 8):
             "r_work": r_work,
             "roi_cells": len(roi_cells),
             "shards": len(shard_keys),
-            "features_in_shards": len(feature_ids),
+            "features_loaded": len(contours_gdf),
             "features_returned": len(contours_clipped),
-            "method": "shard_based_filtering"
+            "method": "split_file_loading"
         }
         
         result['summary'] = summary
@@ -1596,21 +1592,52 @@ def get_rivers(lat: float, lon: float, k: int = 4, r_work: int = 8):
 @app.get("/api/rail")
 def get_rail_lines(lat: float, lon: float, k: int = 10, res: int = 8):
     """
-    Get rail lines from PostGIS within analysis area.
-    Returns line geometries for railway infrastructure.
+    """
+    """
+    Rail lines layer - SHARD-BASED SPLIT FILE LOADING ENABLED
+    Loads only the required split files from Supabase Storage.
     """
     try:
-        analyzer = get_postgis()
-        result = analyzer.query_rail_lines(
-            center_lon=lon,
-            center_lat=lat,
-            res=res,
-            k=k,
-            max_features=1000
+        import h3
+        from shapely.geometry import Polygon, box
+        from utils_h3 import hex_polygon_wgs84
+        from storage_split_loader import load_rail_for_shards
+
+        # Step 1: Get ROI hex cells
+        center_hex = _geo_to_cell(lat, lon, res)
+        roi_cells = set(h3.grid_disk(center_hex, k))
+        print(f"[Rail] Center: {lat},{lon} | res={res} | k={k}")
+        print(f"[Rail] ROI cells: {len(roi_cells)} at res{res}")
+
+        # Step 2: Get parent r7 shards
+        shard_keys = set()
+        for cell in roi_cells:
+            parent = h3.cell_to_parent(cell, 7)
+            shard_keys.add(parent)
+
+        print(f"[Rail] Shard keys (r7): {len(shard_keys)}")
+
+        # Step 3: Load rail features from split files
+        gdf = load_rail_for_shards(shard_keys)
+        print(f"[Rail] Loaded {len(gdf)} features from split files")
+
+        # Step 4: Clip to ROI
+        roi_poly = box(
+            min([hex_polygon_wgs84(cell).bounds[0] for cell in roi_cells]),
+            min([hex_polygon_wgs84(cell).bounds[1] for cell in roi_cells]),
+            max([hex_polygon_wgs84(cell).bounds[2] for cell in roi_cells]),
+            max([hex_polygon_wgs84(cell).bounds[3] for cell in roi_cells])
         )
-        return result
+        clipped = gdf[gdf.intersects(roi_poly)]
+        print(f"[Rail] Returned {len(clipped)} features after clipping")
+
+        # Convert to GeoJSON dict
+        geojson = clipped.__geo_interface__
+        return JSONResponse(content=geojson, status_code=200)
     except Exception as e:
-        print(f"[rail] Error: {e}")
+        print(f"[Rail] Error: {e}")
+        import traceback
+        traceback.print_exc()
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.get("/healthz")
