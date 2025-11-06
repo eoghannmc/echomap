@@ -8,7 +8,7 @@ export type FieldDef = { key: string; label: string; type: "string"|"number"|"da
 export type TableMeta = {
   id: string; name: string; fields: FieldDef[]; createdAt: number; updatedAt: number;
 };
-export type RowFeature = GeoJSON.Feature<GeoJSON.Point, {
+export type RowFeature = GeoJSON.Feature<GeoJSON.Geometry, {
   ID: string; name?: string; color?: string; bufferOn?: boolean; bufferRadius?: number;
   [k: string]: any;
 }>;
@@ -78,15 +78,25 @@ export async function addRow(id: string, feat: RowFeature) {
   await DB.setItem(`table:${id}`, b);
 }
 
-export async function updateRow(id: string, rowId: string, props: Partial<RowFeature["properties"]>) {
+export async function updateRow(
+  id: string,
+  rowId: string,
+  updates: { props?: Partial<RowFeature["properties"]>; geometry?: GeoJSON.Geometry }
+) {
   const b = await getTable(id);
   const i = b.rows.findIndex(r => r.properties.ID === rowId);
   if (i < 0) throw new Error("Row not found");
-  const nextID = props.ID ?? b.rows[i].properties.ID;
+  const incomingProps = updates.props ?? {};
+  const nextID = incomingProps.ID ?? b.rows[i].properties.ID;
   if (nextID !== b.rows[i].properties.ID && b.rows.some(r => r.properties.ID === nextID)) {
     throw new Error("ID must be unique");
   }
-  b.rows[i] = { ...b.rows[i], properties: { ...b.rows[i].properties, ...props } };
+  const nextGeom = updates.geometry ?? b.rows[i].geometry;
+  b.rows[i] = {
+    ...b.rows[i],
+    geometry: nextGeom,
+    properties: { ...b.rows[i].properties, ...incomingProps }
+  };
   b.meta.updatedAt = Date.now();
   await DB.setItem(`table:${id}`, b);
 }
