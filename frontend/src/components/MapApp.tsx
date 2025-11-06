@@ -576,7 +576,7 @@ export default function MapApp() {
   const mapRef = useRef<MLMap | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const addrMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const drawRef = useRef<MapboxDraw | null>(null);
+  const drawRef = useRef<any>(null);
   const drawModeRef = useRef<DrawMode | null>(null);
   const measureStateRef = useRef<MeasureState>({ active: false, mode: "line" });
   const drawingTableIdRef = useRef<string | null>(null);
