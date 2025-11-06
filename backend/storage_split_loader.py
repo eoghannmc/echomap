@@ -25,12 +25,12 @@ except Exception as e:
     print(f"[Storage] Warning: Could not load .env file: {e}")
 
 SUPABASE_URL = os.getenv('SUPABASE_URL') or os.getenv('NEXT_PUBLIC_SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_SERVICE_KEY')
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     print(f"[Storage] SUPABASE_URL: {'***' if SUPABASE_URL else 'MISSING'}")
     print(f"[Storage] SUPABASE_KEY: {'***' if SUPABASE_KEY else 'MISSING'}")
-    raise RuntimeError("Missing Supabase credentials in environment. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.")
+    raise RuntimeError("Missing Supabase credentials in environment. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY environment variables.")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
