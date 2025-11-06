@@ -6,10 +6,6 @@ from dotenv import load_dotenv
 from pathlib import Path
 load_dotenv(Path(__file__).parent / ".env")
 
-# Download parquet files from Supabase Storage on Railway startup
-from storage_download import ensure_data_files
-ensure_data_files()
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -108,6 +104,17 @@ if os.environ.get("BOOTSTRAP_FROM_SUPABASE", "false").lower() == "true":
 MASTER_GPKG = Path("data_master/master.gpkg")
 
 app = FastAPI(title="EchoApp Backend", version="1.0.0")
+
+# Download parquet files on startup (non-blocking)
+@app.on_event("startup")
+async def startup_event():
+    """Download parquet files from Supabase Storage if needed."""
+    try:
+        from storage_download import ensure_data_files
+        ensure_data_files()
+    except Exception as e:
+        print(f"⚠️  Warning: Could not download data files: {e}")
+        print("   Continuing with local files if available...")
 
 # CORS (adjust for your domains)
 app.add_middleware(
