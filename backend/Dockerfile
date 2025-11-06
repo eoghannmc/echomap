@@ -36,14 +36,11 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Copy backend code
-COPY . ./backend/
-
-# Copy config directory (already part of . copy above, but explicit for clarity)
-# Config is already included in the COPY . above
+# Copy backend code to /app (not /app/backend/)
+COPY . .
 
 # Expose port (Railway will set PORT env var)
 EXPOSE 8000
 
-# Run the application
-CMD ["sh", "-c", "uvicorn backend.app:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Run the application (app.py is now in /app/)
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]
