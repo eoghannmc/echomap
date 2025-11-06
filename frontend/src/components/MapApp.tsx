@@ -4,9 +4,14 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import type { FormEvent } from "react";
 import maplibregl, { Map as MLMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import MapboxDraw from "@mapbox/mapbox-gl-draw";
-import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import * as turf from "@turf/turf";
+
+// Import MapboxDraw conditionally (client-side only) to avoid SSR issues
+let MapboxDraw: any;
+if (typeof window !== 'undefined') {
+  MapboxDraw = require('@mapbox/mapbox-gl-draw');
+  require('@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css');
+}
 
 import { listTables, createTable, addRow, updateRow, deleteRow, getTable } from "@/lib/geoTables";
 
