@@ -408,15 +408,21 @@ def get_places_data():
 
 @lru_cache(maxsize=1)
 def get_meshblock_data():
-    """Load and cache meshblock parquet data"""
+    """Load and cache meshblock parquet data (from local or Storage)"""
     global _meshblock_cache
     if _meshblock_cache is None:
-        if not MESHBLOCK_PARQUET_PATH.exists():
-            raise RuntimeError(f"Meshblock parquet not found: {MESHBLOCK_PARQUET_PATH}")
-        
-        import geopandas as gpd
-        _meshblock_cache = gpd.read_parquet(MESHBLOCK_PARQUET_PATH)
-        print(f"[Meshblock] Loaded {len(_meshblock_cache)} meshblocks from parquet")
+        # Try local file first (for dev)
+        if MESHBLOCK_PARQUET_PATH.exists():
+            import geopandas as gpd
+            _meshblock_cache = gpd.read_parquet(MESHBLOCK_PARQUET_PATH)
+            print(f"[Meshblock] Loaded {len(_meshblock_cache)} meshblocks from local parquet")
+        else:
+            # Fall back to on-demand loading from Storage (for Railway)
+            print(f"[Meshblock] Local file not found, loading from Storage...")
+            from storage_loader import load_parquet_from_storage
+            _meshblock_cache = load_parquet_from_storage("meshblock/SHARDED_MESHBLOCK_h3.parquet", use_cache=True)
+            if _meshblock_cache is None:
+                raise RuntimeError(f"Failed to load meshblock data from local or Storage")
     
     return _meshblock_cache
 
@@ -436,15 +442,21 @@ def get_meshblock_links():
 
 @lru_cache(maxsize=1)
 def get_flora_data():
-    """Load and cache flora/fauna parquet data"""
+    """Load and cache flora/fauna parquet data (from local or Storage)"""
     global _flora_cache
     if _flora_cache is None:
-        if not FLORA_PARQUET_PATH.exists():
-            raise RuntimeError(f"Flora parquet not found: {FLORA_PARQUET_PATH}")
-        
-        import geopandas as gpd
-        _flora_cache = gpd.read_parquet(FLORA_PARQUET_PATH)
-        print(f"[Flora] Loaded {len(_flora_cache)} flora/fauna features from parquet")
+        # Try local file first (for dev)
+        if FLORA_PARQUET_PATH.exists():
+            import geopandas as gpd
+            _flora_cache = gpd.read_parquet(FLORA_PARQUET_PATH)
+            print(f"[Flora] Loaded {len(_flora_cache)} flora/fauna features from local parquet")
+        else:
+            # Fall back to on-demand loading from Storage (for Railway)
+            print(f"[Flora] Local file not found, loading from Storage...")
+            from storage_loader import load_parquet_from_storage
+            _flora_cache = load_parquet_from_storage("flora/flora_fauna_h3.parquet", use_cache=True)
+            if _flora_cache is None:
+                raise RuntimeError(f"Failed to load flora data from local or Storage")
     
     return _flora_cache
 
@@ -470,15 +482,21 @@ def get_flora_links_for_prefixes(prefixes: set):
 
 @lru_cache(maxsize=1)
 def get_property_data():
-    """Load and cache property parquet data"""
+    """Load and cache property parquet data (from local or Storage)"""
     global _property_cache
     if _property_cache is None:
-        if not PROPERTY_PARQUET_PATH.exists():
-            raise RuntimeError(f"Property parquet not found: {PROPERTY_PARQUET_PATH}")
-        
-        import geopandas as gpd
-        _property_cache = gpd.read_parquet(PROPERTY_PARQUET_PATH)
-        print(f"[Property] Loaded {len(_property_cache)} property parcels from parquet")
+        # Try local file first (for dev)
+        if PROPERTY_PARQUET_PATH.exists():
+            import geopandas as gpd
+            _property_cache = gpd.read_parquet(PROPERTY_PARQUET_PATH)
+            print(f"[Property] Loaded {len(_property_cache)} property parcels from local parquet")
+        else:
+            # Fall back to on-demand loading from Storage (for Railway)
+            print(f"[Property] Local file not found, loading from Storage...")
+            from storage_loader import load_parquet_from_storage
+            _property_cache = load_parquet_from_storage("property/property_h3.parquet", use_cache=True)
+            if _property_cache is None:
+                raise RuntimeError(f"Failed to load property data from local or Storage")
     
     return _property_cache
 
@@ -504,15 +522,21 @@ def get_property_links_for_prefixes(prefixes: set):
 
 @lru_cache(maxsize=1)
 def get_roads_data():
-    """Load and cache roads parquet data"""
+    """Load and cache roads parquet data (from local or Storage)"""
     global _roads_cache
     if _roads_cache is None:
-        if not ROADS_PARQUET_PATH.exists():
-            raise RuntimeError(f"Roads parquet not found: {ROADS_PARQUET_PATH}")
-        
-        import geopandas as gpd
-        _roads_cache = gpd.read_parquet(ROADS_PARQUET_PATH)
-        print(f"[Roads] Loaded {len(_roads_cache)} road features from parquet")
+        # Try local file first (for dev)
+        if ROADS_PARQUET_PATH.exists():
+            import geopandas as gpd
+            _roads_cache = gpd.read_parquet(ROADS_PARQUET_PATH)
+            print(f"[Roads] Loaded {len(_roads_cache)} road features from local parquet")
+        else:
+            # Fall back to on-demand loading from Storage (for Railway)
+            print(f"[Roads] Local file not found, loading from Storage...")
+            from storage_loader import load_parquet_from_storage
+            _roads_cache = load_parquet_from_storage("roads/roads_h3.parquet", use_cache=True)
+            if _roads_cache is None:
+                raise RuntimeError(f"Failed to load roads data from local or Storage")
     
     return _roads_cache
 
@@ -538,15 +562,21 @@ def get_roads_links_for_prefixes(prefixes: set):
 
 @lru_cache(maxsize=1)
 def get_contours_data():
-    """Load and cache contours parquet data"""
+    """Load and cache contours parquet data (from local or Storage)"""
     global _contours_cache
     if _contours_cache is None:
-        if not CONTOURS_PARQUET_PATH.exists():
-            raise RuntimeError(f"Contours parquet not found: {CONTOURS_PARQUET_PATH}")
-        
-        import geopandas as gpd
-        _contours_cache = gpd.read_parquet(CONTOURS_PARQUET_PATH)
-        print(f"[Contours] Loaded {len(_contours_cache)} contour features from parquet")
+        # Try local file first (for dev)
+        if CONTOURS_PARQUET_PATH.exists():
+            import geopandas as gpd
+            _contours_cache = gpd.read_parquet(CONTOURS_PARQUET_PATH)
+            print(f"[Contours] Loaded {len(_contours_cache)} contour features from local parquet")
+        else:
+            # Fall back to on-demand loading from Storage (for Railway)
+            print(f"[Contours] Local file not found, loading from Storage...")
+            from storage_loader import load_parquet_from_storage
+            _contours_cache = load_parquet_from_storage("contours/contours_h3.parquet", use_cache=True)
+            if _contours_cache is None:
+                raise RuntimeError(f"Failed to load contours data from local or Storage")
     
     return _contours_cache
 
@@ -572,15 +602,21 @@ def get_contours_links_for_prefixes(prefixes: set):
 
 @lru_cache(maxsize=1)
 def get_electricity_data():
-    """Load and cache electricity transmission parquet data"""
+    """Load and cache electricity transmission parquet data (from local or Storage)"""
     global _electricity_cache
     if _electricity_cache is None:
-        if not ELECTRICITY_PARQUET_PATH.exists():
-            raise RuntimeError(f"Electricity parquet not found: {ELECTRICITY_PARQUET_PATH}")
-        
-        import geopandas as gpd
-        _electricity_cache = gpd.read_parquet(ELECTRICITY_PARQUET_PATH)
-        print(f"[Electricity] Loaded {len(_electricity_cache)} transmission line features from parquet")
+        # Try local file first (for dev)
+        if ELECTRICITY_PARQUET_PATH.exists():
+            import geopandas as gpd
+            _electricity_cache = gpd.read_parquet(ELECTRICITY_PARQUET_PATH)
+            print(f"[Electricity] Loaded {len(_electricity_cache)} transmission line features from local parquet")
+        else:
+            # Fall back to on-demand loading from Storage (for Railway)
+            print(f"[Electricity] Local file not found, loading from Storage...")
+            from storage_loader import load_parquet_from_storage
+            _electricity_cache = load_parquet_from_storage("electricity/electricity_transmission_h3.parquet", use_cache=True)
+            if _electricity_cache is None:
+                raise RuntimeError(f"Failed to load electricity data from local or Storage")
     
     return _electricity_cache
 
@@ -606,15 +642,21 @@ def get_electricity_links_for_prefixes(prefixes: set):
 
 @lru_cache(maxsize=1)
 def get_hydro_modified_data():
-    """Load and cache modified rivers parquet data"""
+    """Load and cache modified rivers parquet data (from local or Storage)"""
     global _hydro_modified_cache
     if _hydro_modified_cache is None:
-        if not HYDRO_MODIFIED_PARQUET_PATH.exists():
-            raise RuntimeError(f"Modified rivers parquet not found: {HYDRO_MODIFIED_PARQUET_PATH}")
-        
-        import geopandas as gpd
-        _hydro_modified_cache = gpd.read_parquet(HYDRO_MODIFIED_PARQUET_PATH)
-        print(f"[Hydro] Loaded {len(_hydro_modified_cache)} modified river features from parquet")
+        # Try local file first (for dev)
+        if HYDRO_MODIFIED_PARQUET_PATH.exists():
+            import geopandas as gpd
+            _hydro_modified_cache = gpd.read_parquet(HYDRO_MODIFIED_PARQUET_PATH)
+            print(f"[Hydro] Loaded {len(_hydro_modified_cache)} modified river features from local parquet")
+        else:
+            # Fall back to on-demand loading from Storage (for Railway)
+            print(f"[Hydro] Local file not found, loading modified rivers from Storage...")
+            from storage_loader import load_parquet_from_storage
+            _hydro_modified_cache = load_parquet_from_storage("hydro/modified_rivers_h3.parquet", use_cache=True)
+            if _hydro_modified_cache is None:
+                raise RuntimeError(f"Failed to load modified rivers data from local or Storage")
     
     return _hydro_modified_cache
 
@@ -640,15 +682,21 @@ def get_hydro_modified_links_for_prefixes(prefixes: set):
 
 @lru_cache(maxsize=1)
 def get_hydro_priority_data():
-    """Load and cache priority rivers parquet data"""
+    """Load and cache priority rivers parquet data (from local or Storage)"""
     global _hydro_priority_cache
     if _hydro_priority_cache is None:
-        if not HYDRO_PRIORITY_PARQUET_PATH.exists():
-            raise RuntimeError(f"Priority rivers parquet not found: {HYDRO_PRIORITY_PARQUET_PATH}")
-        
-        import geopandas as gpd
-        _hydro_priority_cache = gpd.read_parquet(HYDRO_PRIORITY_PARQUET_PATH)
-        print(f"[Hydro] Loaded {len(_hydro_priority_cache)} priority river features from parquet")
+        # Try local file first (for dev)
+        if HYDRO_PRIORITY_PARQUET_PATH.exists():
+            import geopandas as gpd
+            _hydro_priority_cache = gpd.read_parquet(HYDRO_PRIORITY_PARQUET_PATH)
+            print(f"[Hydro] Loaded {len(_hydro_priority_cache)} priority river features from local parquet")
+        else:
+            # Fall back to on-demand loading from Storage (for Railway)
+            print(f"[Hydro] Local file not found, loading priority rivers from Storage...")
+            from storage_loader import load_parquet_from_storage
+            _hydro_priority_cache = load_parquet_from_storage("hydro/priority_rivers_h3.parquet", use_cache=True)
+            if _hydro_priority_cache is None:
+                raise RuntimeError(f"Failed to load priority rivers data from local or Storage")
     
     return _hydro_priority_cache
 

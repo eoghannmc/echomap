@@ -93,35 +93,27 @@ def download_directory(storage_prefix: str, local_dir: Path):
 
 def ensure_data_files():
     """
-    Ensure all required parquet files exist locally.
-    Download from Supabase Storage if missing.
+    Download only LINKS files on startup (small, ~50MB total).
+    Main parquet files will be loaded on-demand from Storage.
+    This prevents Railway startup timeouts.
     """
     print("=" * 60)
-    print("📦 Checking parquet data files...")
+    print("📦 Downloading links files for shard filtering...")
     print("=" * 60)
     
     if not SUPABASE_ENABLED:
-        print("⚠️  Supabase not configured, using local files only")
+        print("⚠️  Supabase not configured, will use local files/on-demand loading")
         print()
         return
     
-    files_to_check = [
+    # Only download small links files - main files loaded on-demand
+    links_to_download = [
         # (storage_path, local_path, description)
-        ("flora/flora_fauna_h3.parquet", BASE_PATH / "shard_flora" / "flora_fauna_h3.parquet", "Flora main"),
-        ("property/property_h3.parquet", BASE_PATH / "shard_property" / "property_h3.parquet", "Property main"),
-        ("meshblock/SHARDED_MESHBLOCK_h3.parquet", BASE_PATH / "shard_meshblock" / "SHARDED_MESHBLOCK_h3.parquet", "Meshblock main"),
         ("meshblock/SHARDED_MESHBLOCK_h3_links.parquet", BASE_PATH / "shard_meshblock" / "SHARDED_MESHBLOCK_h3_links.parquet", "Meshblock links"),
-        ("places/pois_h3.parquet", BASE_PATH / "shard_data" / "pois_h3.parquet", "Places/POIs"),
-        ("roads/roads_h3.parquet", BASE_PATH / "SHARDS_ROADS" / "roads_h3.parquet", "Roads main"),
-        ("contours/contours_h3.parquet", BASE_PATH / "SHARDS_CONTOURS" / "contours_h3.parquet", "Contours main"),
         ("contours/contours_h3_links.parquet", BASE_PATH / "SHARDS_CONTOURS" / "contours_h3_links.parquet", "Contours links"),
-        ("electricity/electricity_transmission_h3.parquet", BASE_PATH / "SHARDS_ELEC" / "electricity_transmission_h3.parquet", "Electricity main"),
-        ("hydro/modified_rivers_h3.parquet", BASE_PATH / "SHARDS_HYDRO" / "modified_rivers_h3.parquet", "Hydro modified rivers"),
-        ("hydro/priority_rivers_h3.parquet", BASE_PATH / "SHARDS_HYDRO" / "priority_rivers_h3.parquet", "Hydro priority rivers"),
-        ("hextable/hex_polys_with_tags_res8_vic_enriched.parquet", BASE_PATH / "hextable" / "hex_polys_with_tags_res8_vic_enriched.parquet", "Hextable enriched"),
     ]
     
-    dirs_to_check = [
+    dirs_to_download = [
         # (storage_prefix, local_dir, description)
         ("flora/flora_fauna_h3_links.parquet_by_prefix2", BASE_PATH / "shard_flora" / "flora_fauna_h3_links.parquet_by_prefix2", "Flora links"),
         ("property/property_h3_links.parquet_by_prefix2", BASE_PATH / "shard_property" / "property_h3_links.parquet_by_prefix2", "Property links"),
@@ -133,20 +125,20 @@ def ensure_data_files():
     
     downloads_needed = False
     
-    # Check single files
-    for storage_path, local_path, desc in files_to_check:
+    # Download single links files
+    for storage_path, local_path, desc in links_to_download:
         if not local_path.exists():
-            print(f"⬇️  Missing: {desc}")
+            print(f"⬇️  Downloading: {desc}")
             downloads_needed = True
             download_file(storage_path, local_path)
         else:
             file_size_mb = local_path.stat().st_size / (1024 * 1024)
             print(f"✅ Found: {desc} ({file_size_mb:.1f} MB)")
     
-    # Check directories
-    for storage_prefix, local_dir, desc in dirs_to_check:
+    # Download links directories
+    for storage_prefix, local_dir, desc in dirs_to_download:
         if not local_dir.exists() or not list(local_dir.glob("*.parquet")):
-            print(f"⬇️  Missing: {desc} directory")
+            print(f"⬇️  Downloading: {desc} directory")
             downloads_needed = True
             download_directory(storage_prefix, local_dir)
         else:
@@ -155,9 +147,10 @@ def ensure_data_files():
     
     print("=" * 60)
     if downloads_needed:
-        print("✅ Downloaded missing files from Supabase Storage")
+        print("✅ Links files downloaded (~50MB total)")
     else:
-        print("✅ All parquet files available locally")
+        print("✅ All links files available")
+    print("📌 Main parquet files will be loaded on-demand from Storage")
     print("=" * 60)
     print()
 
