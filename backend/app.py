@@ -1046,12 +1046,18 @@ def get_properties(lat: float, lon: float, k: int = 4, res: int = 8, r_work: int
         
         print(f"[Property] Shard keys (r7): {len(shard_keys)}")
         
-        # Step 3: Load property data and links
-        property_gdf = get_property_data()
-        
-        # Get prefixes from shard keys
+        # Step 3: Load links FIRST (critical for Railway - don't load 707MB file without links!)
         prefixes = {str(sk)[:2] for sk in shard_keys}
         links_df = get_property_links_for_prefixes(prefixes)
+        
+        if links_df.empty:
+            raise RuntimeError(
+                f"Property links not found. Links files must be downloaded at startup. "
+                f"Cannot load 707MB property file without shard filtering."
+            )
+        
+        # Step 4: Load property data (only after confirming links exist)
+        property_gdf = get_property_data()
         
         print(f"[Property] Total properties: {len(property_gdf)}, Total links: {len(links_df)}")
         print(f"[Property] Using shard-based filtering")
@@ -1134,12 +1140,18 @@ def get_flora(lat: float, lon: float, k: int = 4, r_work: int = 8):
         
         print(f"[Flora] Shard keys (r7): {len(shard_keys)}")
         
-        # Step 3: Load flora data and links
-        flora_gdf = get_flora_data()
-        
-        # Get prefixes from shard keys
+        # Step 3: Load links FIRST (critical for Railway - don't load 1.1GB file without links!)
         prefixes = {str(sk)[:2] for sk in shard_keys}
         links_df = get_flora_links_for_prefixes(prefixes)
+        
+        if links_df.empty:
+            raise RuntimeError(
+                f"Flora links not found. Links files must be downloaded at startup. "
+                f"Cannot load 1.1GB flora file without shard filtering."
+            )
+        
+        # Step 4: Load flora data (only after confirming links exist)
+        flora_gdf = get_flora_data()
         
         print(f"[Flora] Total flora features: {len(flora_gdf)}, Total links: {len(links_df)}")
         print(f"[Flora] Using shard-based filtering")
@@ -1222,12 +1234,18 @@ def get_roads(lat: float, lon: float, k: int = 4, r_work: int = 8):
         
         print(f"[Roads] Shard keys (r7): {len(shard_keys)}")
         
-        # Step 3: Load roads data and links
-        roads_gdf = get_roads_data()
-        
-        # Get prefixes from shard keys
+        # Step 3: Load links FIRST (critical for Railway - don't load 204MB file without links!)
         prefixes = {str(sk)[:2] for sk in shard_keys}
         links_df = get_roads_links_for_prefixes(prefixes)
+        
+        if links_df.empty:
+            raise RuntimeError(
+                f"Roads links not found. Links files must be downloaded at startup. "
+                f"Cannot load 204MB roads file without shard filtering."
+            )
+        
+        # Step 4: Load roads data (only after confirming links exist)
+        roads_gdf = get_roads_data()
         
         print(f"[Roads] Total road features: {len(roads_gdf)}, Total links: {len(links_df)}")
         print(f"[Roads] Using shard-based filtering")
@@ -1310,12 +1328,18 @@ def get_contours(lat: float, lon: float, k: int = 4, r_work: int = 8):
         
         print(f"[Contours] Shard keys (r7): {len(shard_keys)}")
         
-        # Step 3: Load contours data and links
-        contours_gdf = get_contours_data()
-        
-        # Get prefixes from shard keys
+        # Step 3: Load links FIRST (critical for Railway - don't load 1.5GB file without links!)
         prefixes = {str(sk)[:2] for sk in shard_keys}
         links_df = get_contours_links_for_prefixes(prefixes)
+        
+        if links_df.empty:
+            raise RuntimeError(
+                f"Contours links not found. Links files must be downloaded at startup. "
+                f"Cannot load 1.5GB contours file without shard filtering."
+            )
+        
+        # Step 4: Load contours data (only after confirming links exist)
+        contours_gdf = get_contours_data()
         
         print(f"[Contours] Total contour features: {len(contours_gdf)}, Total links: {len(links_df)}")
         print(f"[Contours] Using shard-based filtering")

@@ -32,7 +32,7 @@ else:
     # Local dev: data_web is at repo root
     BASE_PATH = Path(__file__).parent.parent / "data_web"
 
-def download_file(storage_path: str, local_path: Path):
+def download_file(storage_path: str, local_path: Path, suppress_errors: bool = False):
     """Download a single file from Supabase Storage."""
     if not SUPABASE_ENABLED:
         return False
@@ -52,7 +52,8 @@ def download_file(storage_path: str, local_path: Path):
         print(f"  ✅ Downloaded {storage_path} ({file_size_mb:.1f} MB)")
         return True
     except Exception as e:
-        print(f"  ❌ Error downloading {storage_path}: {e}")
+        if not suppress_errors:
+            print(f"  ❌ Error downloading {storage_path}: {e}")
         return False
 
 def list_files_in_storage(prefix: str):
@@ -79,12 +80,12 @@ def download_directory(storage_prefix: str, local_dir: Path):
         return False
     
     try:
-        # Try direct download of known shard files (87.parquet is common shard file)
-        # Instead of listing (which doesn't work with nested paths), try downloading expected files
-        expected_files = [f"{i:02d}.parquet" for i in range(100)]  # 00.parquet to 99.parquet
+        # Try direct download of likely shard files
+        # Victoria typically uses shards 80-89 range, but try broader range to be safe
+        expected_files = [f"{i:02d}.parquet" for i in range(100)]  # 00-99.parquet
         
         success_count = 0
-        files_found = 0
+        attempted = 0
         
         for filename in expected_files:
             storage_path = f"{storage_prefix}/{filename}"
@@ -92,23 +93,20 @@ def download_directory(storage_prefix: str, local_dir: Path):
             
             # Skip if already exists locally
             if local_path.exists():
+                success_count += 1
                 continue
             
-            try:
-                # Try to download - if file doesn't exist in Storage, it will fail silently
-                if download_file(storage_path, local_path):
-                    success_count += 1
-                    files_found += 1
-            except:
-                # File doesn't exist in Storage, skip
-                pass
+            # Try to download - download_file() handles errors internally
+            attempted += 1
+            if download_file(storage_path, local_path, suppress_errors=True):
+                success_count += 1
         
-        if files_found > 0:
-            print(f"  📊 Downloaded {success_count}/{files_found} shard files")
+        if success_count > 0:
+            print(f"  📊 {success_count} shard files available ({attempted} attempted downloads)")
         else:
-            print(f"  ℹ️  No shard files found (may not exist for this layer)")
+            print(f"  ⚠️  No shard files found (tried {attempted} downloads)")
         
-        return True  # Don't fail if no files found
+        return success_count > 0  # Return True if at least one file available
     except Exception as e:
         print(f"  ❌ Error downloading directory {storage_prefix}: {e}")
         return False
