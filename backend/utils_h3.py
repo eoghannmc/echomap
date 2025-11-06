@@ -32,6 +32,10 @@ def hex_polygon_metric(cell: str) -> Polygon:
     pts = [to_metric.transform(lon, lat) for (lon, lat) in _boundary(cell)]
     return Polygon(pts)
 
+def hex_polygon_wgs84(cell: str) -> Polygon:
+    """Return hexagon polygon in WGS84 (lat/lon) coordinates."""
+    return Polygon(_boundary(cell))
+
 def disk_and_rings(center_lon: float, center_lat: float, res: int, k: int):
     c = _geo_to_cell(center_lat, center_lon, res)
     disk_cells = _disk(c, k)
