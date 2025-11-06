@@ -14,6 +14,7 @@ type Props = {
   onSelectAny?: (item: SuggestItem) => void;
   onDone?: () => void; // informs parent when user clicks Done
   onLoadingChange?: (loading: boolean) => void; // informs parent when suggestions are fetching
+  onClose?: () => void;
 };
 
 function parseInput(raw: string) {
@@ -45,6 +46,7 @@ export default function SearchBar({
   onSelectAny,
   onDone,
   onLoadingChange,
+  onClose,
 }: Props) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -149,10 +151,19 @@ export default function SearchBar({
     onDone?.();
   }
 
+  function handleClose() {
+    setQ("");
+    setOpen(false);
+    setHasPicked(false);
+    suppressRef.current = false;
+    onClose?.();
+  }
+
   return (
     <div className="searchbar-wrapper relative w-full">
       <div className="flex items-stretch gap-1 sm:gap-2">
         <input
+          key="search-input"
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -172,7 +183,19 @@ export default function SearchBar({
           }}
           onBlur={() => setTimeout(() => setOpen(false), 120)}
           autoComplete="off"
+          suppressHydrationWarning
         />
+
+        {!hasPicked && onClose && (
+          <button
+            type="button"
+            className="px-2 py-1 sm:px-3 sm:py-2 border bg-white hover:bg-gray-50 text-sm sm:text-base whitespace-nowrap"
+            onClick={handleClose}
+            title="Close search"
+          >
+            Close
+          </button>
+        )}
 
         {hasPicked && (
           <button
