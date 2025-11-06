@@ -172,27 +172,45 @@ def load_split_files_for_shards(
 # Dataset-specific loaders
 def load_roads_for_shards(r7_cells: Set[str]) -> gpd.GeoDataFrame:
     """Load roads data for specific R7 shards"""
-    return load_split_files_for_shards('roads', r7_cells, 'roads_{prefix}.parquet')
+    gdf = load_split_files_for_shards('roads', r7_cells, 'roads_{prefix}.parquet')
+    if not gdf.empty and "geometry" in gdf.columns:
+        gdf = gdf.set_geometry("geometry")
+    return gdf
 
 def load_contours_for_shards(r7_cells: Set[str]) -> gpd.GeoDataFrame:
     """Load contours data for specific R7 shards"""
-    return load_split_files_for_shards('contours', r7_cells, 'contours_{prefix}.parquet')
+    gdf = load_split_files_for_shards('contours', r7_cells, 'contours_{prefix}.parquet')
+    if not gdf.empty and "geometry" in gdf.columns:
+        gdf = gdf.set_geometry("geometry")
+    return gdf
 
 def load_flora_for_shards(r7_cells: Set[str]) -> gpd.GeoDataFrame:
     """Load flora data for specific R7 shards"""
-    return load_split_files_for_shards('flora', r7_cells, 'flora_fauna_{prefix}.parquet')
+    gdf = load_split_files_for_shards('flora', r7_cells, 'flora_fauna_{prefix}.parquet')
+    if not gdf.empty and "geometry" in gdf.columns:
+        gdf = gdf.set_geometry("geometry")
+    return gdf
 
 def load_property_for_shards(r7_cells: Set[str]) -> gpd.GeoDataFrame:
     """Load property data for specific R7 shards"""
-    return load_split_files_for_shards('property', r7_cells, 'property_{prefix}.parquet')
+    gdf = load_split_files_for_shards('property', r7_cells, 'property_{prefix}.parquet')
+    if not gdf.empty and "geometry" in gdf.columns:
+        gdf = gdf.set_geometry("geometry")
+    return gdf
 
 def load_powerlines_for_shards(r7_cells: Set[str]) -> gpd.GeoDataFrame:
     """Load powerlines data for specific R7 shards"""
-    return load_split_files_for_shards('powerlines', r7_cells, 'electricity_transmission_{prefix}.parquet')
+    gdf = load_split_files_for_shards('powerlines', r7_cells, 'electricity_transmission_{prefix}.parquet')
+    if not gdf.empty and "geometry" in gdf.columns:
+        gdf = gdf.set_geometry("geometry")
+    return gdf
 
 def load_rivers_for_shards(r7_cells: Set[str]) -> gpd.GeoDataFrame:
     """Load rivers data for specific R7 shards"""
-    return load_split_files_for_shards('rivers', r7_cells, 'modified_rivers_{prefix}.parquet')
+    gdf = load_split_files_for_shards('rivers', r7_cells, 'modified_rivers_{prefix}.parquet')
+    if not gdf.empty and "geometry" in gdf.columns:
+        gdf = gdf.set_geometry("geometry")
+    return gdf
 
 def load_rail_for_shards(r7_cells: Set[str]) -> gpd.GeoDataFrame:
     """Load rail data for specific R7 shards"""
