@@ -157,10 +157,19 @@ def ensure_data_files():
     
     # Download links directories
     for storage_prefix, local_dir, desc in dirs_to_download:
-        if not local_dir.exists() or not list(local_dir.glob("*.parquet")):
+        needs_download = not local_dir.exists() or not list(local_dir.glob("*.parquet"))
+        
+        if needs_download:
             print(f"⬇️  Downloading: {desc} directory")
             downloads_needed = True
-            download_directory(storage_prefix, local_dir)
+            success = download_directory(storage_prefix, local_dir)
+            
+            # Verify files were actually downloaded
+            downloaded_files = list(local_dir.glob("*.parquet"))
+            if downloaded_files:
+                print(f"✅ Downloaded: {desc} ({len(downloaded_files)} files)")
+            else:
+                print(f"⚠️  Warning: {desc} - no shard files found in Storage")
         else:
             file_count = len(list(local_dir.glob("*.parquet")))
             print(f"✅ Found: {desc} ({file_count} files)")
