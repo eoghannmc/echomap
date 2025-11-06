@@ -1,12 +1,6 @@
 from typing import Set
 import geopandas as gpd
 
-def load_rail_for_shards(r7_cells: Set[str]) -> gpd.GeoDataFrame: 
-    """Load rail data for specific R7 shards"""
-    gdf = load_split_files_for_shards('rail', r7_cells, 'rail_{prefix}.parquet')
-    if not gdf.empty and "geometry" in gdf.columns:
-        gdf = gdf.set_geometry("geometry")
-    return gdf
 """
 Storage loader for split parquet files.
 Downloads only the specific 6-char or 8-char prefix files needed for the query.
@@ -19,15 +13,24 @@ from typing import Set, List
 from supabase import create_client
 from dotenv import load_dotenv
 
-# Load environment variables
-env_path = Path(__file__).parent / '.env'
-load_dotenv(env_path)
+# Load environment variables (optional for Railway deployment)
+try:
+    env_path = Path(__file__).parent / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+        print("[Storage] Loaded environment from .env file")
+    else:
+        print("[Storage] No .env file found, using system environment variables")
+except Exception as e:
+    print(f"[Storage] Warning: Could not load .env file: {e}")
 
-SUPABASE_URL = os.getenv('NEXT_PUBLIC_SUPABASE_URL')
+SUPABASE_URL = os.getenv('SUPABASE_URL') or os.getenv('NEXT_PUBLIC_SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise RuntimeError("Missing Supabase credentials in environment")
+    print(f"[Storage] SUPABASE_URL: {'***' if SUPABASE_URL else 'MISSING'}")
+    print(f"[Storage] SUPABASE_KEY: {'***' if SUPABASE_KEY else 'MISSING'}")
+    raise RuntimeError("Missing Supabase credentials in environment. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -190,3 +193,10 @@ def load_powerlines_for_shards(r7_cells: Set[str]) -> gpd.GeoDataFrame:
 def load_rivers_for_shards(r7_cells: Set[str]) -> gpd.GeoDataFrame:
     """Load rivers data for specific R7 shards"""
     return load_split_files_for_shards('rivers', r7_cells, 'modified_rivers_{prefix}.parquet')
+
+def load_rail_for_shards(r7_cells: Set[str]) -> gpd.GeoDataFrame:
+    """Load rail data for specific R7 shards"""
+    gdf = load_split_files_for_shards('rail', r7_cells, 'rail_{prefix}.parquet')
+    if not gdf.empty and "geometry" in gdf.columns:
+        gdf = gdf.set_geometry("geometry")
+    return gdf
