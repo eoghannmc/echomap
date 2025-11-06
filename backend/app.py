@@ -581,19 +581,29 @@ def get_contours_links_for_prefixes(prefixes: set):
     global _contours_links_cache
     import pandas as pd
     
+    print(f"[Contours Links] Requested prefixes: {prefixes}")
+    print(f"[Contours Links] Links directory: {CONTOURS_LINKS_DIR}")
+    print(f"[Contours Links] Directory exists: {CONTOURS_LINKS_DIR.exists()}")
+    
     all_links = []
     for prefix in prefixes:
         if prefix not in _contours_links_cache:
             parquet_file = CONTOURS_LINKS_DIR / f"{prefix}.parquet"
+            print(f"[Contours Links] Looking for: {parquet_file}")
+            print(f"[Contours Links] File exists: {parquet_file.exists()}")
             if parquet_file.exists():
                 _contours_links_cache[prefix] = pd.read_parquet(parquet_file)
+                print(f"[Contours Links] Loaded {len(_contours_links_cache[prefix])} links for prefix {prefix}")
         
         if prefix in _contours_links_cache:
             all_links.append(_contours_links_cache[prefix])
     
     if all_links:
-        return pd.concat(all_links, ignore_index=True)
+        result = pd.concat(all_links, ignore_index=True)
+        print(f"[Contours Links] Total links returned: {len(result)}")
+        return result
     else:
+        print(f"[Contours Links] No links found for any prefix!")
         return pd.DataFrame(columns=['feature_id', 'h3_r7'])
 
 @lru_cache(maxsize=1)
