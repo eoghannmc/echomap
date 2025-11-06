@@ -105,21 +105,17 @@ MASTER_GPKG = Path("data_master/master.gpkg")
 
 app = FastAPI(title="EchoApp Backend", version="1.0.0")
 
-# Download parquet files on startup (non-blocking)
-# DISABLED: Takes too long for Railway startup timeout
-# To download files manually, use: python storage_download.py
+# Download links files on startup (small, ~50MB)
+# Main parquet files loaded on-demand from Storage
 @app.on_event("startup")
 async def startup_event():
-    """Startup event - data download disabled to avoid Railway timeout."""
-    print("⚠️  Automatic data download disabled.")
-    print("   Parquet layers will fail unless data is pre-loaded.")
-    print("   PostGIS layers (Planning, SA2) will work normally.")
-    # Uncomment below to enable automatic download (causes Railway timeout):
-    # try:
-    #     from storage_download import ensure_data_files
-    #     ensure_data_files()
-    # except Exception as e:
-    #     print(f"⚠️  Warning: Could not download data files: {e}")
+    """Download links files on startup for shard filtering."""
+    try:
+        from storage_download import ensure_data_files
+        ensure_data_files()
+    except Exception as e:
+        print(f"⚠️  Warning: Could not download links files: {e}")
+        print("   Layers will attempt on-demand loading from Storage.")
 
 # CORS (adjust for your domains)
 app.add_middleware(
