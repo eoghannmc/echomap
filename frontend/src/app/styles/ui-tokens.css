@@ -205,28 +205,23 @@ body {
   position: fixed;
   z-index: 1;
   
-  /* Mobile and minimobile: full width from left */
-  left: 0;
-  right: 0;
+  /* Mobile and minimobile: wider, use most of screen width */
+  left: var(--gap-10);
+  right: var(--gap-10);
   top: 10%;
   width: auto;
-  /* padding: 0 var(--gap-10); */
-  margin: 0px 16px 0px 8px;
+  margin: 0;
+  max-width: calc(100vw - 40px);  /* Just leave 20px on each side */
   
-  /* Tablet and up: centered with max width */
+  /* Tablet and up: centered with max width (40% to match toast) */
   @media (min-width: 768px) {
     left: 50%;
     right: auto;
     transform: translateX(-50%);
     top: 30%;
     padding: 0;
-    width: min(
-      880px,
-      calc(
-        50vw -
-          ((var(--gap-50) + var(--collapsed-gap-right)) + (var(--gap-50) + 10px))
-      )
-    );
+    max-width: 40vw;
+    width: 40vw;
   }
 }
 
@@ -242,33 +237,51 @@ body {
 }
 
 /* Toast (below header, anchored to left) */
-.echo-toast {
+/* Toast container - wraps both toast and pills */
+.echo-toast-container {
   position: fixed;
   z-index: 1;
-  background: #ffffff;
-  border: 1px solid var(--color-line);
-  box-shadow: var(--shadow-panel);
-  padding: 0px 10px;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  overflow: hidden;
+  flex-direction: column;
+  gap: 5px;
   
-  /* Mobile and minimobile: full width from left */
+  /* Mobile: wider, use most of screen width */
   left: var(--gap-10);
-  right: var(--gap-10);
-  top: 8%;
-  max-width: none;
+  right: auto;
+  top: calc(8% + 20px);
+  width: calc(100vw - 40px);  /* Just leave 20px on each side */
   
-  /* Tablet and up: centered with max width */
+  /* Tablet and up: centered with max width (40% of screen) */
   @media (min-width: 768px) {
     left: 50%;
     right: auto;
     transform: translateX(-50%);
-    top: 10%;
-    max-width: min(60vw, 520px);
+    top: calc(10% + 20px);
+    width: 40vw;
   }
 }
+
+.echo-toast {
+  background: #ffffff;
+  border: 1px solid var(--color-line);
+  box-shadow: var(--shadow-panel);
+  padding: 8px 10px 10px 10px;  /* Reduced bottom padding */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  position: relative;  /* For absolute positioned buttons */
+  width: 100%;
+}
+
+/* Toast pills - directly below toast within container */
+.toast-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+
 .echo-toast .label {
   font-size: 12px;
   color: #444;
