@@ -9,6 +9,7 @@ pyogrio
 rtree
 numpy
 pandas
+pyarrow
 h3
 httpx
 sqlalchemy>=2.0.0
