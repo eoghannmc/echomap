@@ -4,14 +4,9 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import type { FormEvent } from "react";
 import maplibregl, { Map as MLMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import MapboxDraw from "@mapbox/mapbox-gl-draw";
+import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import * as turf from "@turf/turf";
-
-// Import MapboxDraw conditionally (client-side only) to avoid SSR issues
-let MapboxDraw: any;
-if (typeof window !== 'undefined') {
-  MapboxDraw = require('@mapbox/mapbox-gl-draw');
-  require('@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css');
-}
 
 import { listTables, createTable, addRow, updateRow, deleteRow, getTable } from "@/lib/geoTables";
 
@@ -576,7 +571,7 @@ export default function MapApp() {
   const mapRef = useRef<MLMap | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const addrMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const drawRef = useRef<any>(null);
+  const drawRef = useRef<MapboxDraw | null>(null);
   const drawModeRef = useRef<DrawMode | null>(null);
   const measureStateRef = useRef<MeasureState>({ active: false, mode: "line" });
   const drawingTableIdRef = useRef<string | null>(null);
@@ -3557,7 +3552,7 @@ export default function MapApp() {
         </div>
 
         {/* Footer */}
-        <div className="side-panel__footer">Echo Map Victoria - 2025</div>
+        <div className="side-panel__footer">Echo Map Victoria - 2025 - V1.1</div>
       </div>
 
       {/* ===== Intro overlay ===== */}
