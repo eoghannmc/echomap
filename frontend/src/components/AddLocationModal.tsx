@@ -4,19 +4,49 @@ import { nominatimSearchVic, nominatimReverse } from "@/lib/geocode";
 import { createTable, listTables, addRow, getTable } from "@/lib/geoTables";
 import { makeBuffer, fcFromRows } from "@/lib/geoOps";
 
-export default function AddLocationModal({
-  map, onClose, onData
-}:{ map: MLMap|null, onClose:()=>void,
-   onData:(points: GeoJSON.FeatureCollection, buffers: GeoJSON.FeatureCollection)=>void }) {
+type PrefillLocation = {
+  lon?: number;
+  lat?: number;
+  name?: string;
+  h3?: string;
+};
 
-  const [tables, setTables] = useState<{id:string;name:string}[]>([]);
+export default function AddLocationModal({
+  map,
+  onClose,
+  onData,
+  prefill,
+}: {
+  map: MLMap | null;
+  onClose: () => void;
+  onData: (
+    points: GeoJSON.FeatureCollection,
+    buffers: GeoJSON.FeatureCollection
+  ) => void;
+  prefill?: PrefillLocation;
+}) {
+
+  const [tables, setTables] = useState<{ id: string; name: string }[]>([]);
   const [tableId, setTableId] = useState<string>("");
-  const [q,setQ] = useState(""); const [results,setResults] = useState<any[]>([]);
-  const [lon,setLon] = useState<number|undefined>(); const [lat,setLat] = useState<number|undefined>();
-  const [ID,setID] = useState("tag"); const [name,setName] = useState("");
-  const [color,setColor] = useState("#1a7f37"); const [bufOn,setBufOn] = useState(false); const [bufR,setBufR] = useState(500);
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [lon, setLon] = useState<number | undefined>(prefill?.lon);
+  const [lat, setLat] = useState<number | undefined>(prefill?.lat);
+  const [ID, setID] = useState(prefill?.h3 ?? "tag");
+  const [name, setName] = useState(prefill?.name ?? "");
+  const [color, setColor] = useState("#1a7f37");
+  const [bufOn, setBufOn] = useState(false);
+  const [bufR, setBufR] = useState(500);
 
   useEffect(()=>{ listTables().then(ts => { setTables(ts); if (ts[0]) setTableId(ts[0].id); }); },[]);
+
+  useEffect(() => {
+    if (!prefill) return;
+    setLon(prefill.lon);
+    setLat(prefill.lat);
+    setName(prefill.name ?? "");
+    setID(prefill.h3 ?? "tag");
+  }, [prefill]);
 
   async function ensureTable() {
     if (tableId) return tableId;
@@ -42,17 +72,38 @@ export default function AddLocationModal({
     if (lon==null||lat==null) return;
     const id = await ensureTable();
     const feat: GeoJSON.Feature = {
-      type:"Feature",
-      geometry: { type:"Point", coordinates:[lon,lat] },
-      properties: { ID: ID||"tag", name, color, bufferOn: bufOn, bufferRadius: bufOn?bufR:undefined }
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [lon, lat] },
+      properties: {
+        ID: ID || "tag",
+        name,
+        color,
+        bufferOn: bufOn,
+        bufferRadius: bufOn ? bufR : undefined,
+        h3: prefill?.h3,
+      },
     };
     await addRow(id, feat as any);
     // refresh to map
     const b = await getTable(id);
     const points = fcFromRows(b.rows);
-    const buffers = { type:"FeatureCollection", features: b.rows.filter(r=>r.properties.bufferOn)
-      .map(r => ({ ...(makeBuffer(r.geometry.coordinates[0], r.geometry.coordinates[1], r.properties.bufferRadius||0)),
-                   properties: { color: r.properties.color } })) } as GeoJSON.FeatureCollection;
+    const buffers = {
+      type: "FeatureCollection",
+      features: b.rows
+        .filter((r) => r.properties.bufferOn)
+        .map((r) => {
+          const coords = ((r.geometry as any)?.coordinates ?? [0, 0]) as [number, number];
+          const buf = makeBuffer(
+            coords[0],
+            coords[1],
+            r.properties.bufferRadius || 0
+          );
+          return {
+            ...buf,
+            properties: { color: r.properties.color },
+          };
+        }),
+    } as GeoJSON.FeatureCollection;
     onData(points, buffers);
     onClose();
   }
@@ -81,7 +132,11 @@ export default function AddLocationModal({
           )}
           <div className="flex gap-2">
             <button className="border rounded px-3 py-1" onClick={pickOnMap}>Place on map</button>
-            <div className="text-xs text-slate-500 self-center">{lon!=null&&lat!=null ? `Picked: ${lon.toFixed(5)}, ${lat.toFixed(5)}` : "Click to pick a location"}</div>
+            <div className="text-xs text-slate-500 self-center">
+              {lon != null && lat != null
+                ? `Picked: ${lon.toFixed(5)}, ${lat.toFixed(5)}${prefill?.h3 ? ` (H3 r8: ${prefill.h3})` : ""}`
+                : "Click to pick a location"}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
