@@ -1988,7 +1988,7 @@ export default function MapApp() {
     }
   }, [BACKEND_URL, analysisRadius, getAnalysisOrigin, updatePlacesFilter]);
 
-  const reloadActiveLayers = useCallback(() => {
+  const reloadActiveLayers = useCallback((currentLayersEnabled: typeof layersEnabled) => {
     // Loader function mapping
     const loaders: Record<string, () => void> = {
       planning: loadPlanningLayer,
@@ -2007,12 +2007,11 @@ export default function MapApp() {
 
     // Reload all enabled layers
     LAYER_CONFIGS.forEach(config => {
-      if (layersEnabled[config.key]) {
+      if (currentLayersEnabled[config.key]) {
         loaders[config.key]?.();
       }
     });
   }, [
-    layersEnabled,
     loadPlanningLayer,
     loadParcelsLayer,
     loadMeshBlocksLayer,
@@ -2035,7 +2034,7 @@ export default function MapApp() {
 
   useEffect(() => {
     if (!mapReady) return;
-    reloadActiveLayers();
+    reloadActiveLayers(layersEnabled);
   }, [analysisRadius, mapReady, reloadActiveLayers]);
 
   const focusMapOnPoint = useCallback(
@@ -2076,7 +2075,7 @@ export default function MapApp() {
         setHexInfo(null);
       }
 
-      map.once("moveend", reloadActiveLayers);
+      map.once("moveend", () => reloadActiveLayers(layersEnabled));
     },
     [
       fetchHexDetails,
@@ -2293,7 +2292,8 @@ export default function MapApp() {
     const allowPopup = () =>
       !drawModeRef.current &&
       !measureStateRef.current.active &&
-      !showSearchUIRef.current;
+      !showSearchUIRef.current &&
+      !showAddModal;
 
     const handleClick = (e: maplibregl.MapMouseEvent & { originalEvent?: any }) => {
       if (!allowPopup()) return;
@@ -2542,34 +2542,21 @@ export default function MapApp() {
 
         // Once the map finishes moving, restore previously enabled layers
         map.once("moveend", () => {
-          const ensureVisible = (ids: string[]) => {
-            ids.forEach((id) => {
-              if (map.getLayer(id)) {
-                map.setLayoutProperty(id, "visibility", "visible");
-              }
-            });
-          };
-
-          // Loader function mapping
-          const loaders: Record<string, () => void> = {
-            planning: loadPlanningLayer,
-            parcels: loadParcelsLayer,
-            meshBlocks: loadMeshBlocksLayer,
-            sa2: loadSA2Layer,
-            places: loadPlacesLayer,
-            density: loadDensityLayer,
-            rail: loadRailLayer,
-            flora: loadFloraLayer,
-          };
-
-          // Restore each previously enabled layer
+          // Restore layer enabled state
+          setLayersEnabled(wasEnabled);
+          
+          // Make layers visible
           LAYER_CONFIGS.forEach(config => {
             if (wasEnabled[config.key]) {
-              setLayersEnabled((prev) => ({ ...prev, [config.key]: true }));
-              ensureVisible(config.mapLayerIds);
-              loaders[config.key]?.();
+              config.mapLayerIds.forEach((id) => {
+                if (map.getLayer(id)) {
+                  map.setLayoutProperty(id, "visibility", "visible");
+                }
+              });
             }
           });
+          
+          reloadActiveLayers(wasEnabled);
         });
 
         if (addrMarkerRef.current) addrMarkerRef.current.remove();
@@ -2598,7 +2585,7 @@ export default function MapApp() {
       setPanelOpen(true);
       setOverlayTab("layers");
     }
-  }, [layersEnabled, loadPlanningLayer, loadParcelsLayer, loadMeshBlocksLayer, loadSA2Layer, loadPlacesLayer, loadDensityLayer, loadRailLayer, loadFloraLayer]);
+  }, [layersEnabled, loadPlanningLayer, loadParcelsLayer, loadMeshBlocksLayer, loadSA2Layer, loadPlacesLayer, loadDensityLayer, loadRailLayer, loadFloraLayer, reloadActiveLayers]);
 
   /* ============== Render ============== */
   return (
